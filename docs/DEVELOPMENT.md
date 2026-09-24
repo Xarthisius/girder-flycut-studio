@@ -1,9 +1,11 @@
 # Development
 
-Follow README.md to install the vendored dashboards dependency and the pinned,
+Follow the [README](../README.md) to install the vendored dashboards dependency and the pinned,
 patched JSONForms dependency into a Girder 5 environment. MongoDB is required.
 Use a separate database for tests; the runtime, database, and uploaded data are not
 part of this source repository.
+
+Run the commands below from the repository root.
 
 ## Frontend
 
@@ -45,8 +47,8 @@ state; the older browser harness is supplementary, not a deployed-portal test.
 - `materials.py`, `settings.py`: live Girder foils and dashboard policy.
 - `import_storage.py`, `inventory.py`: Excel inputs and CSV registration timestamps.
 
-Settings and data formats are documented in DASHBOARD_CONFIGURATION.md,
-CONFIGURATION_FORM_VALIDATION.md, and the README. Draft → submitted → generated →
+Settings and data formats are documented in [Dashboard configuration](DASHBOARD_CONFIGURATION.md),
+[Configuration form validation](CONFIGURATION_FORM_VALIDATION.md), and the [README](../README.md). Draft → submitted → generated →
 registered is the supported lifecycle. Complete Workflow uses the same API stages.
 
 Stack-level MongoDB locks serialize writes. Completed generation/registration is

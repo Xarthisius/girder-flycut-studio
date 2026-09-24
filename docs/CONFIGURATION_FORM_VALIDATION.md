@@ -24,7 +24,7 @@ server checks. It documents implemented behavior, not additional desired rules.
 
 | Field or condition | Requirement |
 | --- | --- |
-| Stack ID | Nonempty after trimming whitespace. |
+| Stack ID | Required: `F###`, `F####`, or exactly five uppercase Crockford Base32 characters (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`), after trimming whitespace. Cannot be bypassed by acknowledgement. |
 | Foil material | Select a foil from the readable Girder foil catalog. The server resolves and validates the selection. |
 | Template | Select a valid catalog or accessible portal template. |
 | Laser settings | Enable at least one entry. |
@@ -46,16 +46,13 @@ current dashboard; submitted configurations store `preset: null`.
 
 A complete form displays **Needs validation** for any of these conditions:
 
-1. Stack ID does not match `F###`, `F####`, or exactly five uppercase Crockford
-   Base32 characters (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`). This format check is a
-   warning, not an absolute submission restriction.
-2. The Stack ID already has a submitted configuration; submission will replace it.
-3. Operator is blank; the current user's login is used as a fallback.
-4. Any enabled laser entry still carries the default-parameters marker.
-5. Some template layers have no enabled assigned setting; their original template
+1. The Stack ID already has a submitted configuration; submission will replace it.
+2. Operator is blank; the current user's login is used as a fallback.
+3. Any enabled laser entry still carries the default-parameters marker.
+4. Some template layers have no enabled assigned setting; their original template
    laser parameters will remain.
-6. Any listed laser entry is disabled or unused by the chosen template.
-7. A named custom field has no value; it exports as JSON `null`.
+5. Any listed laser entry is disabled or unused by the chosen template.
+6. A named custom field has no value; it exports as JSON `null`.
 
 Open **Status**, review the listed issues, and check the validation acknowledgement
 before submitting. Missing blocking requirements cannot be acknowledged away.

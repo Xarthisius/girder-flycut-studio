@@ -162,7 +162,7 @@ function updateAll() {
 
 function assessConfiguration({stackId, operator, lasers, fields, layers, repeat, wraparound, foilMaterial, template, duplicateStack = false, stackState = null, presetFields = []}) {
   const requirements = [
-    {ok: Boolean(stackId.trim()), text: "Enter a Stack ID.", target: "#stackid"},
+    {ok: /^(?:F[0-9]{3,4}|[0-9A-HJKMNP-TV-Z]{5})$/.test(stackId.trim()), text: stackId.trim() ? "Stack ID must match F###, F####, or five uppercase Crockford Base32 characters." : "Enter a Stack ID.", target: "#stackid"},
     {ok: lasers.some(laser => laser.enabled !== false), text: "Enable at least one laser parameter entry.", target: lasers.length ? '#laserList [data-key="enabled"]' : "#addLaserBtn"},
     {ok: fields.every(field => !String(field.value ?? "").trim() || field.name.trim()), text: "Name each custom field that has a value.", target: `.custom-row:nth-child(${fields.findIndex(field => String(field.value ?? "").trim() && !field.name.trim()) + 1}) [data-key="name"]`}
     ,{ok: Boolean(foilMaterial), text: "Select a foil material.", target: "#foilMaterial"}
@@ -174,7 +174,6 @@ function assessConfiguration({stackId, operator, lasers, fields, layers, repeat,
   const warnings = [];
   const warningTargets = [];
   const warn = (message, target) => {warnings.push(message); warningTargets.push(target);};
-  if (stackId.trim() && !/^(?:F\d{3,4}|[0-9A-HJKMNP-TV-Z]{5})$/.test(stackId.trim())) warn("Stack ID does not match F###, F####, or five-character Crockford Base32 format.", "#stackid");
   if (duplicateStack && !blockedMessage) warn("This Stack ID already has a submitted configuration. Validate replacing the existing submitted configuration.", "#stackid");
   if (!operator.trim()) warn("Operator is empty; your username will be used.", "#operator");
   if (lasers.some(laser => laser.enabled !== false && laser.isDefault)) warn("Some enabled layers still use default laser parameters.", `#laserList .laser-card:nth-child(${lasers.findIndex(laser => laser.enabled !== false && laser.isDefault) + 1}) [data-key="power"]`);
@@ -227,7 +226,7 @@ function validate(showErrors = true) {
   $("#statusSummary").textContent = statusText;
   $("#statusViolations").innerHTML = (state.viewStatus ? [] : result.violations).map((item, index) => `<li><button type="button" class="violation-link" data-violation="${index}"><span class="violation-kind">${item.kind}</span>${escapeHtml(item.text)}<span aria-hidden="true"> ↗</span></button></li>`).join("");
   $("#stackid").classList.toggle("invalid", showErrors && !result.requirements[0].ok);
-  $("#stackidError").textContent = showErrors && !result.requirements[0].ok ? "Stack ID is required." : "";
+  $("#stackidError").textContent = showErrors && !result.requirements[0].ok ? result.requirements[0].text : "";
   $("#runRequiredMarker").classList.toggle("hidden", result.requirements[0].ok && result.requirements[3].ok && result.requirements[4].ok);
   $("#laserError").textContent = showErrors && !result.requirements[1].ok ? "Enable at least one laser parameter entry." : "";
   $("#customError").textContent = showErrors && !result.requirements[2].ok ? "Custom fields with values need names." : "";

@@ -9,7 +9,9 @@ assert.equal(assess({...base,stackId:''}).status,'Incomplete');
 assert.equal(assess({...base,lasers:[{enabled:false}]}).status,'Incomplete');
 assert.equal(assess({...base,fields:[{name:'',value:'3'}]}).status,'Incomplete');
 for(const stackId of ['F123','F1234','0AZ9Z']) assert.equal(assess({...base,stackId}).status,'Complete');
-for(const stackId of ['bad id','OOOOO','F12']) assert.equal(assess({...base,stackId}).status,'Needs validation');
+for(const stackId of ['bad id','OOOOO','F12','abcde','123456','F１２３']) {
+  assert.equal(assess({...base,stackId}).status,'Incomplete');
+}
 for(const changes of [{operator:''},{lasers:[{enabled:true,isDefault:true}]},{wraparound:false,layers:['F1','F2']},{lasers:[{enabled:true},{enabled:false}]},{lasers:[{enabled:true},{enabled:true}]},{fields:[{name:'thickness',value:''}]}]) assert.equal(assess({...base,...changes}).status,'Needs validation');
 assert.equal(assess({...base,fields:[{name:'',value:''}]}).status,'Complete');
 console.log('Status requirements, all six warnings, and legacy/Crockford formats passed.');
@@ -24,6 +26,7 @@ assert.deepEqual(checkGate(assess({...base,stackId:''}),true),[false,0]);
 assert.deepEqual(checkGate(assess({...base,operator:''}),false),[false,0]);
 assert.deepEqual(checkGate(assess({...base,operator:''}),true),[true,0]);
 assert.deepEqual(checkGate(assess(base),true),[true,0]);
+for (const stackId of ['bad id','OOOOO','F12','abcde','123456','F１２３']) assert.deepEqual(checkGate(assess({...base,stackId}),true),[false,0]);
 console.log('Export gate blocks incomplete data and requires warning confirmation.');
 
 assert.equal(assess({...base,foilMaterial:""}).status,"Incomplete");

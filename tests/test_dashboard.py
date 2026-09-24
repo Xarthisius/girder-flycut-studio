@@ -142,12 +142,12 @@ class BuilderExportTest(unittest.TestCase):
     def test_warning_values_and_fallbacks(self):
         from girder_flycut.validation import normalize_builder_config
         config = configuration()
-        config['run_params'].update(stackid='unusual id', operator='')
+        config['run_params'].update(stackid='00005', operator='')
         config['custom_fields'] = {'empty': ''}
         result = normalize_builder_config(config, USER, CATALOG)
         self.assertEqual(result['custom_fields']['empty'], None)
         self.assertEqual(result['run_params']['operator'], USER['login'])
-        self.assertEqual(result['run_params']['stackid'], 'unusual id')
+        self.assertEqual(result['run_params']['stackid'], '00005')
         config['laser_params'] = [dict(config['laser_params'][0], enabled=False)]
         with self.assertRaises(ValueError):
             normalize_builder_config(config, USER, CATALOG)

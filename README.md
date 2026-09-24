@@ -21,7 +21,7 @@ Build the JSONForms frontend with `npm install && npm run build` in its `girder_
 
 Start your Girder server with its normal MongoDB and assetstore configuration, then enable **Flyer Studio** in the dashboards administration page and grant the intended users access. The plugin entry point is `flycut`, Python package is `girder_flycut`, and distribution remains `girder-flycut` to replace the current installation cleanly. Do not install the older, separate studio implementation alongside it.
 
-The supplied JSONForms patch is required: it adds configurable child titles/relationships and avoids unrelated AIMDL hooks on standalone installations. See [dependency notes](patches/README.md).
+The supplied JSONForms patch is required: it adds configurable child titles/relationships and avoids unrelated AIMDL hooks on standalone installations. See [dependency notes](docs/JSONFORMS_COMPATIBILITY.md).
 
 ## Features
 
@@ -35,6 +35,8 @@ The supplied JSONForms patch is required: it adds configurable child titles/rela
 - Complete Workflow performs submission, generation, and registration in sequence. Presets are disabled.
 
 Saved user data and generated files live in Girder/MongoDB and its assetstore. They are not included here. No local preview accounts, passwords, or database dumps are packaged.
+
+Additional documentation: [development guide](docs/DEVELOPMENT.md) and [changelog](docs/CHANGELOG.md).
 
 ## Edit and rebuild
 
@@ -75,9 +77,9 @@ registered configurations available with a **View IGSN** link.
 
 ## Admin settings and shared storage
 
-See [Configuration form validation](CONFIGURATION_FORM_VALIDATION.md) for form requirements, acknowledgement rules, and downstream checks.
+See [Configuration form validation](docs/CONFIGURATION_FORM_VALIDATION.md) for form requirements, acknowledgement rules, and downstream checks.
 
-See [Dashboard configuration](DASHBOARD_CONFIGURATION.md) for setup instructions, a complete settings example, permissions, and the Complete Workflow module.
+See [Dashboard configuration](docs/DASHBOARD_CONFIGURATION.md) for setup instructions, a complete settings example, permissions, and the Complete Workflow module.
 
 Administrators configure the policy through Girder’s **Dashboard settings** (the settings gear), using its Settings JSON object. The in-dashboard settings screen is hidden. Set the workspace folder ID/path and the users/groups for creators, owners, editors, and viewers; principal entries use `{"type": "group", "id": "<Girder group ID>"}` or `{"type": "user", "id": "<Girder user ID>"}`. The destination is stored
 by folder ID (`workspace_folder_id`); `workspace_path` displays its current path

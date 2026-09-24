@@ -17,10 +17,8 @@ def normalize_config(config, user, catalog, submitted=False):
         raise ValueError("Missing run parameters.")
     stack = run.get("stackid", "")
     valid_stack = isinstance(stack, str) and bool(re.fullmatch(r"(?:[0-9A-HJKMNP-TV-Z]{5}|F[0-9]{3,4})", stack))
-    if submitted:
-        valid_stack = isinstance(stack, str) and 0 < len(stack) <= 120 and not any(c in stack for c in "/\\") and all(ord(c) >= 32 for c in stack)
     if not valid_stack:
-        raise ValueError("Stack ID must be five Crockford characters or a legacy F### ID.")
+        raise ValueError("Stack ID must match F###, F####, or five uppercase Crockford Base32 characters.")
     for field, collection in [("foil_material", "materials"), ("template", "templates")]:
         if run.get(field) not in {entry["id"] for entry in catalog[collection]}:
             raise ValueError(f"Choose a valid {field}.")
@@ -79,13 +77,15 @@ def assignment_options(assignment):
 
 
 def normalize_builder_config(config, user, catalog):
-    """Persist builder exports using its three blocking requirements."""
+    """Persist builder exports after checking blocking requirements."""
     if not isinstance(config, dict) or len(json.dumps(config, allow_nan=False).encode()) > 256 * 1024:
         raise ValueError('Configuration must be an object no larger than 256 KB.')
     result = copy.deepcopy(config)
     run = result.get('run_params')
     if not isinstance(run, dict) or not isinstance(run.get('stackid'), str) or not run['stackid'].strip():
         raise ValueError('Stack ID is required.')
+    if not re.fullmatch(r'(?:F[0-9]{3,4}|[0-9A-HJKMNP-TV-Z]{5})', run['stackid'].strip()):
+        raise ValueError('Stack ID must match F###, F####, or five uppercase Crockford Base32 characters.')
     for field, collection in [('template', 'templates'), ('foil_material', 'materials')]:
         if not run.get(field) or run[field] not in {entry['id'] for entry in catalog[collection]}:
             raise ValueError(f'Invalid {field} selection.')
@@ -107,8 +107,6 @@ def normalize_builder_config(config, user, catalog):
 def builder_warnings(config, catalog):
     run = config.get('run_params', {})
     warnings = []
-    if not re.fullmatch(r'(?:F[0-9]{3,4}|[0-9A-HJKMNP-TV-Z]{5})', str(run.get('stackid', '')).strip()):
-        warnings.append('Stack ID format')
     if not str(run.get('operator') or '').strip():
         warnings.append('Operator fallback')
     lasers = config.get('laser_params', [])

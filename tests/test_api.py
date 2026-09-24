@@ -581,3 +581,13 @@ def test_excel_input_links(server, enabled, user):
     assert set(meta['igsn']) == {'JHAMAB00010-00005','JHAMAB00010-00006'}
     assert len(meta['igsn']) == 2
     assert Deposition().findOne({'igsn':'JHAMAB00010-00006'})['flycutInputs'] == [ref['itemId']]
+
+
+def test_stack_id_format_cannot_be_acknowledged(server, enabled, user):
+    for stack in ['bad id', 'OOOOO', 'F12', 'abcde', '123456', 'F１２３']:
+        config = configuration()
+        config['run_params']['stackid'] = stack
+        response = server.request('/flycut/config', method='POST', user=user,
+            params={'submit': True, 'validated': True, 'config': json.dumps(config)})
+        assertStatus(response, 400)
+        assert 'Stack ID must match' in response.json['message']
