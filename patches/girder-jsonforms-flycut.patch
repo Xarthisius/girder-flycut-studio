@@ -1,0 +1,83 @@
+diff --git a/girder_jsonforms/__init__.py b/girder_jsonforms/__init__.py
+index 13546ae..a08924d 100644
+--- a/girder_jsonforms/__init__.py
++++ b/girder_jsonforms/__init__.py
+@@ -398,6 +398,11 @@ def _item_advanced_search(self, query, limit, offset, sort):
+ 
+ 
+ def handle_deposition_registration(event: events.Event) -> None:
++    # Local IGSN installations do not need a worker/broker for an unconfigured
++    # AIMD integration. The task itself also skips when this token is absent.
++    from .worker_plugin.amdee import aimd_portal_token
++    if not aimd_portal_token:
++        return
+     ids = event.info.get("ids", [])
+     if not ids:
+         return
+diff --git a/girder_jsonforms/models/deposition.py b/girder_jsonforms/models/deposition.py
+index c6ad942..d888750 100644
+--- a/girder_jsonforms/models/deposition.py
++++ b/girder_jsonforms/models/deposition.py
+@@ -727,7 +727,9 @@ class Deposition(AccessControlledModel):
+                     return alt_id.get("alternateIdentifier")
+         return None
+ 
+-    def create_batch(self, main_deposition, indices, already_registered=False):
++    def create_batch(self, main_deposition, indices, already_registered=False,
++                     relation_type="IsPartOf", inverse_relation_type="HasPart",
++                     child_titles=None):
+         # Register the children centrally first. If the registry rejects the
+         # batch (a duplicate index, an unknown parent) nothing is written
+         # locally either -- otherwise Girder would be left holding children the
+@@ -759,7 +761,7 @@ class Deposition(AccessControlledModel):
+             }
+ 
+         relatedIdentifier = {
+-            "relationType": "IsPartOf",
++            "relationType": relation_type,
+             "relatedIdentifier": main_deposition["igsn"],
+             "relatedIdentifierType": "IGSN",
+         }
+@@ -774,7 +776,7 @@ class Deposition(AccessControlledModel):
+             metadata["relatedIdentifiers"] = [
+                 relatedIdentifier
+                 for relatedIdentifier in relatedIdentifiers
+-                if relatedIdentifier["relationType"] != "HasPart"
++                if relatedIdentifier["relationType"] not in {"HasPart", inverse_relation_type}
+             ]
+             metadata.pop("url", None)
+             metadata.pop("doi", None)
+@@ -786,7 +788,8 @@ class Deposition(AccessControlledModel):
+             )
+             child_igsn = f"{main_deposition['igsn']}-{igsn_index}"
+             child_metadata = {
+-                "titles": [{"title": f"{titles[0]['title']} - {igsn_index}"}],
++                "titles": [{"title": (child_titles or {}).get(
++                    igsn_index, f"{titles[0]['title']} - {igsn_index}")}],
+                 "doi": f"{igsn_prefix}/{child_igsn}",
+                 **metadata.copy(),
+             }
+@@ -850,7 +853,7 @@ class Deposition(AccessControlledModel):
+         # HasPart for the main deposition
+         has_parts = [
+             {
+-                "relationType": "HasPart",
++                "relationType": inverse_relation_type,
+                 "relatedIdentifier": _["igsn"],
+                 "relatedIdentifierType": "IGSN",
+             }
+diff --git a/girder_jsonforms/rest/aimdl.py b/girder_jsonforms/rest/aimdl.py
+index 01f98b3..18b5ec3 100644
+--- a/girder_jsonforms/rest/aimdl.py
++++ b/girder_jsonforms/rest/aimdl.py
+@@ -771,6 +771,10 @@ def item_save(event):
+ 
+ 
+ def propagate_to_projects(item, sync=True):
++    # Personal workspace items cannot belong to the AIMDL collection. Avoid
++    # requiring an AIMDL deployment just to tag a user's files with an IGSN.
++    if item.get("baseParentType") != "collection" or str(item.get("baseParentId")) != str(_AIMDL_COLLECTION_ID):
++        return
+     if not Setting().get(PluginSettings.PROJECTS_ENABLED):
+         logger.debug("Projects are not enabled, skipping propagation")
+         return

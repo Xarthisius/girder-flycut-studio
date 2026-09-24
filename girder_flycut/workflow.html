@@ -1,0 +1,71 @@
+<section id="workflowHome" class="workflow-home">
+  <h1>Choose a module</h1>
+  <button id="adminSettingsBtn" class="button ghost hidden" type="button">Admin settings</button>
+  <div class="workflow-cards workflow-choices">
+    <button id="configurationStepBtn" class="workflow-choice" type="button"><span class="step-number">01</span><strong>Configuration</strong><small>Build, edit, or view configurations.</small></button>
+    <button id="lightburnStepBtn" class="workflow-choice" type="button"><span class="step-number">02</span><strong>Generation</strong><small>Generate stack identity files from submitted configs</small></button>
+    <button id="registerBtn" class="workflow-choice" type="button"><span class="step-number">03</span><strong>Registration</strong><small>Register stack IGSN from file identity files.</small></button>
+    <button id="completeWorkflowBtn" class="workflow-choice" type="button"><span class="step-number">1–3</span><strong>Complete Workflow</strong><small>Configure a stack, then submit to generate files and register its IGSN automatically.</small></button>
+  </div>
+</section>
+<section id="configurationPicker" class="workflow-home hidden">
+  <button id="configPickerBackBtn" class="button ghost" type="button" aria-label="Back to workflow">←</button>
+  <h1 id="configurationPickerTitle">Configuration</h1>
+  <p id="completeWorkflowHint" class="workflow-intro hidden">After submission, files are generated and the stack IGSN is registered automatically. Keep this page open until completion.</p>
+  <label class="field saved-picker">Saved configuration
+    <select id="savedConfigs"><option value="">New configuration</option></select>
+  </label>
+  <label id="presetPicker" class="field saved-picker hidden">Preset<select id="presetSelect" disabled><option value="">No preset</option></select></label>
+  <button id="buildConfigBtn" class="button primary picker-continue" type="button">Build config</button>
+</section>
+<section id="lightburnPicker" class="workflow-home hidden">
+  <button id="lightburnPickerBackBtn" class="button ghost" type="button" aria-label="Back to workflow">←</button>
+  <h1>Generation</h1>
+  <label class="field saved-picker">Submitted configuration
+    <select id="submittedConfigs"><option value="">Choose a submitted configuration</option></select>
+  </label>
+  <p id="filesHint" class="field-note"></p>
+  <a id="generatedFolderLink" class="button ghost hidden" target="_blank" rel="noopener">View files ↗</a><button id="deleteFilesBtn" class="button ghost hidden" type="button">Delete generated files</button>
+  <button id="generateBtn" class="button primary picker-continue" type="button" disabled>Generate files</button>
+</section>
+<section id="registrationPicker" class="workflow-home hidden">
+  <button id="registrationBackBtn" class="button ghost" type="button" aria-label="Back to workflow">←</button>
+  <h1>Registration</h1>
+  <p class="workflow-intro">Create a stack IGSN linked to the selected foil IGSN in Girder.</p>
+  <label class="field saved-picker">Generated configuration<select id="registrationConfigs"></select></label>
+  <p id="registrationHint" class="field-note"></p>
+  <a id="viewIgsnLink" class="button ghost hidden" target="_blank" rel="noopener">View IGSN ↗</a>
+  <button id="registerStackBtn" class="button primary picker-continue" type="button">Register stack IGSN</button>
+</section>
+<p id="runStatus" role="status" aria-live="polite"></p>
+<div id="artifacts" class="artifact-links"></div>
+
+<section id="adminSettingsScreen" class="workflow-home settings-screen hidden">
+  <button id="adminSettingsBack" class="button ghost" type="button">← Back to workflow</button>
+  <h1>Flyer Studio settings</h1>
+  <p>Settings apply to new configurations and IGSNs. Existing files keep their location and permissions.</p>
+  <h2>Shared workspace</h2>
+  <label class="field">Collection<select id="workspaceCollection"></select></label>
+  <button id="browseWorkspaceBtn" class="button ghost" type="button">Choose workspace folder</button>
+  <label class="field">Workspace path<input id="workspacePath" placeholder="/collection/Flyer Studio/Workspace"></label>
+  <p class="field-note">Choose a folder inside a collection. Collaborators also need access to that destination; the settings below do not change the collection’s permissions.</p>
+  <h2>Users and groups</h2>
+  <label class="field">Find a user or group<input id="principalSearch" placeholder="Search by name"></label>
+  <button id="findPrincipalsBtn" class="button ghost" type="button">Search</button>
+  <label class="field">Results<select id="principalResults"></select></label>
+  <label class="field">Add to<select id="principalRole"><option value="creators">IGSN creators</option><option value="owners">Owners</option><option value="editors">Editors</option><option value="viewers">Viewers</option></select></label>
+  <button id="addPrincipalBtn" class="button ghost" type="button">Add user or group</button>
+  <div id="policyLists"></div>
+  <p class="field-note">Creators are attribution only. Groups appear as organizational creators. Owners can manage access; editors can modify data; viewers can read. The highest matching access level wins.</p>
+  <h2>Acting user</h2>
+  <label class="field checkbox-field"><input id="creators_include_user" type="checkbox">Include the registrant as an IGSN creator</label>
+  <label class="field checkbox-field"><input id="owners_include_user" type="checkbox">Include the acting user as an owner</label>
+  <label class="field checkbox-field"><input id="editors_include_user" type="checkbox">Include the acting user as an editor</label>
+  <label class="field checkbox-field"><input id="viewers_include_user" type="checkbox">Include the acting user as a viewer</label>
+  <h2>Visibility</h2>
+  <label class="field checkbox-field"><input id="public_igsn" type="checkbox">Make new stack IGSNs public</label>
+  <label class="field checkbox-field"><input id="public_files" type="checkbox">Make new configuration folders and files public</label>
+  <p class="field-note">IGSN access uses the same owners, editors, and viewers. Parent foil permissions remain unchanged.</p>
+  <button id="saveAdminSettingsBtn" class="button primary" type="button">Save settings</button>
+  <p id="settingsStatus" role="status"></p>
+</section>

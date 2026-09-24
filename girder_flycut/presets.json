@@ -1,0 +1,23 @@
+[
+  {
+    "id": "standard",
+    "label": "Standard",
+    "laser_defaults": {
+      "power": 60,
+      "speed": 100,
+      "qpulsewidth": 200,
+      "frequency": 100,
+      "passes": 1
+    },
+    "custom_fields": {
+      "glass_tl_mm": null,
+      "glass_tr_mm": null,
+      "glass_bl_mm": null,
+      "glass_br_mm": null,
+      "foil_tl_um": null,
+      "foil_tr_um": null,
+      "foil_bl_um": null,
+      "foil_br_um": null
+    }
+  }
+]

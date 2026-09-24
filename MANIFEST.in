@@ -1,0 +1,7 @@
+include README.md DASHBOARD_CONFIGURATION.md CONFIGURATION_FORM_VALIDATION.md build_dashboard.py
+recursive-include config_builder/static *.js *.css *.html
+recursive-include girder_flycut *.py *.json *.js *.css *.html *.lbrn2
+recursive-include tests *.py *.cjs
+
+include DEVELOPMENT.md CHANGELOG.md
+recursive-include patches *.md *.patch JSONFORMS_LICENSE

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flyer Studio</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Flyer Studio home">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span><b>FLYER</b><small>STUDIO</small></span>
+    </a>
+    <div class="top-actions">
+      <button id="saveState" type="button" class="save-state" aria-controls="statusPanel"><span></span> Incomplete</button>
+      <input id="jsonFile" type="file" accept="application/json,.json" hidden>
+      <button id="resetBtn" class="button ghost" type="button">Reset</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="form-pane" aria-label="Configuration form">
+      <div class="intro">
+        <h1>Configure Flyer Stack</h1>
+      </div>
+
+      <form id="configForm" novalidate>
+        <details open class="form-section">
+          <summary><span><b>01</b> Run Parameters <span id="runRequiredMarker" class="section-required-marker hidden" aria-label="Required fields incomplete">*</span></span><span class="chevron">⌃</span></summary>
+          <div class="section-body two-col">
+            <label class="field" for="stackid"><span class="field-label">Stack ID <span class="required">*</span> <button type="button" class="help" data-tip="A unique stack identifier: a 5-character Crockford ID or legacy F### / F#### ID. Other values require confirmation." aria-label="Stack ID help">?</button></span>
+              <span class="input-wrap"><input id="stackid" name="stackid" placeholder="e.g. 00005" required></span>
+              <small class="error" id="stackidError"></small>
+            </label>
+            <label class="field" for="operator"><span class="field-label">Operator <button type="button" class="help" data-tip="The person preparing and running this stack." aria-label="Operator help">?</button></span>
+              <span class="input-wrap"><input id="operator" name="operator" list="operatorNames" autocomplete="off" placeholder="Name or initials"></span>
+              <datalist id="operatorNames"></datalist>
+              <small class="error" id="operatorError"></small>
+            </label>
+            <label class="field"><span class="field-label">Foil material <span class="required">*</span></span>
+              <select id="foilMaterial" name="foil_material"><option value="">Loading materials…</option></select>
+              <small id="materialMeta" class="field-note">Foil IGSNs from Girder</small>
+            </label>
+            <label class="field" for="template"><span class="field-label">Template <span class="required">*</span> <button type="button" class="help" aria-label="Template help" data-tip="Choose the LightBurn layout whose flyer positions and laser layers will be configured.">?</button></span>
+              <select id="template" name="template"><option value="">Loading templates…</option></select>
+              <small id="templateMeta" class="field-note"></small>
+            </label>
+          </div>
+        </details>
+
+        <details open class="form-section">
+          <summary><span><b>02</b> Laser Parameters</span><span class="section-count" id="laserCount">1 / 28</span><span class="chevron">⌃</span></summary>
+          <div class="section-body">
+            <h3 class="section-subtitle">Selection style</h3>
+            <div class="assignment-controls">
+              <label class="field checkbox-field" for="allowWraparound"><input id="allowWraparound" type="checkbox" checked> <span class="field-label">Wraparound <button type="button" class="help" aria-label="Wraparound help" data-tip="Start again at the first setting when the template has more layers than the listed settings cover.">?</button></span></label>
+              <label id="repeatWrap" class="field" for="repeatX"><span class="field-label">Repeat each setting for <button type="button" class="help" aria-label="Repeat each setting help" data-tip="Apply each listed setting to this many consecutive template layers before moving to the next setting.">?</button></span>
+                <span class="repeat-input"><input id="repeatX" name="repeat_x" type="number" min="1" max="10000" step="1" value="1"><span>layers</span></span>
+              </label>
+            </div>
+            <h3 class="section-subtitle">Parameters</h3>
+            <div id="laserList" class="laser-list"></div>
+            <button id="addLaserBtn" class="button dashed" type="button"><span>＋</span> Add laser setting</button>
+            <div class="excel-import">
+              <input id="excelFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+              <button id="importExcelBtn" class="button ghost" type="button"><span aria-hidden="true">⇧</span> Import from Excel</button>
+              <small id="excelStatus"></small>
+            </div>
+            <p id="laserError" class="section-error" role="alert"></p>
+          </div>
+        </details>
+
+        <details open class="form-section">
+          <summary><span><b>03</b> Custom Fields</span><span class="section-count" id="customCount">0 fields</span><span class="chevron">⌃</span></summary>
+          <div class="section-body">
+            <div id="customList" class="custom-list"></div>
+            <button id="addCustomBtn" class="button dashed" type="button"><span>＋</span> Add custom field</button>
+            <div id="fieldRecommendations" class="field-recommendations"></div>
+            <datalist id="customFieldNames"></datalist>
+            <p id="customError" class="section-error" role="alert"></p>
+          </div>
+        </details>
+      </form>
+    </section>
+
+    <aside class="viewer-pane" aria-label="Configuration viewer">
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" data-tab="preview">Preview</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="json">JSON</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="status">Status</button>
+      </div>
+      <section id="statusPanel" class="viewer-panel status-panel" role="tabpanel">
+        <h2 id="statusSummary">Incomplete</h2>
+        <ul id="statusViolations"></ul>
+        <label id="validationAckLabel" class="validation-ack hidden"><input id="validationAck" type="checkbox"> I have reviewed and accept the validation warnings.</label>
+      </section>
+      <section id="jsonPanel" class="viewer-panel" role="tabpanel">
+        <div class="viewer-toolbar"><span>config.json</span><button id="copyBtn" type="button">Copy</button></div>
+        <pre id="jsonOutput" tabindex="0" aria-label="Configuration JSON" aria-live="polite"></pre>
+      </section>
+      <section id="previewPanel" class="viewer-panel active" role="tabpanel">
+        <div class="preview-head"><div><span>LIGHTBURN RECREATION</span><strong id="previewTitle">Select a template</strong></div><div class="zoom-control"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomLabel">100%</span><button id="zoomIn" aria-label="Zoom in">+</button></div></div>
+        <div id="previewStage" class="preview-stage"><div id="canvas" class="canvas"><div class="empty-preview">Choose a template to see its flyer layout.</div></div></div>
+        <div class="legend"><span id="flyerTotal">0 flyers</span></div>
+      </section>
+    </aside>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
