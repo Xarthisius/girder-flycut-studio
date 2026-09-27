@@ -71,6 +71,10 @@ No migration of historical output files is performed automatically.
 
 `.github/workflows/build-test.yaml` runs two jobs. **check** is the fast gate: `ruff`,
 a bundle rebuild, a staleness diff against the committed bundle, `node --check`, and the
-three frontend suites. **pytest** needs MongoDB and reproduces `INSTALLATION.md`'s
-clone-and-patch of girder-jsonforms, because that dependency is not installable from an
-index; `docs/CONVERSION_PLAN.md` tracks that as issue F2 and Phase 6 removes it.
+three frontend suites. **pytest** provisions MongoDB and Redis, installs girder-jsonforms
+from its `igsn` branch with its frontend built, and runs the server suite with coverage.
+
+There is deliberately no message broker in CI. Girder deployments always have one — core
+needs it to delete a folder — but the test environment does not, so the `enabled` fixture
+takes pytest_girder's `eagerWorkerTasks`, which runs Celery tasks inline. Girder core uses
+the same fixture to test its own `deleteFolderTask`. Nothing in `tests/` monkeypatches.

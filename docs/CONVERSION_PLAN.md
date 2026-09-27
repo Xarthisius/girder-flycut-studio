@@ -214,9 +214,12 @@ unreadable in review and `git blame` stops being informative.
 Running the 37 tests used to require cloning girder-jsonforms at commit `52f29b7` and applying a
 patch by hand. These tests were not run during the audit and no claim was made about them.
 
-**Outcome** — F2's resolution removed the blocker: `pip install .` resolves the dependency, and the
-CI `pytest` job now provisions MongoDB and runs the suite with coverage. A `tox.ini` wrapping that
-into one local command remains worthwhile.
+**Outcome** — resolved. The suite now runs: **42 passed** locally against MongoDB, 87% coverage, with
+no monkeypatching left in `tests/`. The CI `pytest` job provisions MongoDB and Redis, builds the
+JSONForms frontend, and runs the same command. Two environment requirements were discovered by
+running it, neither previously written down: JSONForms' frontend must be built, and its
+`deposition.created` handler enqueues a Celery task, so tests take pytest_girder's
+`eagerWorkerTasks` fixture. A `tox.ini` wrapping this into one local command remains worthwhile.
 
 ---
 
@@ -433,9 +436,12 @@ unnecessary:
 | Skip the AIMD task when `AIMD_PORTAL_TOKEN` is unset | Unnecessary. It existed to avoid `.delay()` without a broker, but every Girder deployment has one: core enqueues `deleteFolderTask.delay()` on `DELETE /folder/:id` (`girder/api/v1/folder.py:311,395`). The task already returns early without a token. |
 | Skip AIMDL propagation for non-AIMDL items | Replaced by configuration. `PROJECTS_ENABLED` defaults to `true`, and with it on `propagate_to_projects()` calls `AIMDL._get_base_parent()`, which raises `RestException(404)` when no AIMDL collection exists. Setting `jsonforms.projects_enabled` to `false` returns at that function's first line instead. |
 
-**Outcome** — `pip install .` now resolves the dependency unaided, CI installs it without a
-clone-and-patch step, and B5's "no reproducible environment" follows. One documented
-setting replaces 83 lines of patch.
+**Outcome** — one documented setting replaces 83 lines of patch, and CI no longer applies
+one. The dependency is still installed from a checkout rather than by pip resolving the
+reference, but for an unrelated reason: girder-jsonforms ships only prebuilt frontend
+assets, so a pip-from-git install has no `web_client/dist` and its `load()` raises
+`FileNotFoundError`. Its own CI builds the frontend for the same reason. That is a
+packaging gap in the dependency, not a patch, and it no longer blocks B5.
 
 #### F3 — Thin package metadata and no `LICENSE`
 **Minor · Phase 6**

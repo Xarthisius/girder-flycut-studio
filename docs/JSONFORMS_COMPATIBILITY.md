@@ -11,13 +11,19 @@ The branch is required rather than preferred. Stack registration creates each st
 child deposition via `create_batch()`'s `relation_type`, `inverse_relation_type` and
 `child_titles` arguments, which have never been released to PyPI.
 
+Install it from a checkout with its frontend built, rather than letting pip resolve that
+reference — see [INSTALLATION.md](INSTALLATION.md). The package ships only prebuilt
+frontend assets, so a pip-from-git install has no `web_client/dist`, and JSONForms' own
+`registerPluginStaticContent` raises `FileNotFoundError` on `style.css` as soon as
+anything touches the server. Its CI builds the frontend for the same reason.
+
 No patch is needed. There used to be one; every hunk is now either upstream or
 unnecessary:
 
 | Hunk | Status |
 |---|---|
 | `create_batch()` relationships and child titles | Upstreamed as [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34), merged into `igsn` on 2026-09-25 as `51500a3`, in a better form: keyword-only, validated, and tested. |
-| Skip the AIMD portal task when `AIMD_PORTAL_TOKEN` is unset | Unnecessary. It existed to avoid `.delay()` without a broker, but every Girder deployment has one — core itself enqueues `deleteFolderTask.delay()` on `DELETE /folder/:id`. The task already returns early when the token is absent, so the worst case is one queued no-op and a log line per registration. |
+| Skip the AIMD portal task when `AIMD_PORTAL_TOKEN` is unset | Unnecessary in a deployment: every Girder install has a broker — core itself enqueues `deleteFolderTask.delay()` on `DELETE /folder/:id` — and the task returns early without a token, so the worst case is a queued no-op and a log line per registration. Tests have no broker, and use pytest_girder's `eagerWorkerTasks` fixture to run tasks inline, which is how girder core tests its own folder deletion. |
 | Skip AIMDL project propagation for non-AIMDL items | Replaced by configuration. See below. |
 
 ## Configure `jsonforms.projects_enabled`

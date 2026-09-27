@@ -14,9 +14,19 @@ pytestmark = pytest.mark.plugin('flycut')
 
 
 @pytest.fixture
-def enabled(server, db, user, request, monkeypatch, fsAssetstore):
+def enabled(server, db, user, request, fsAssetstore, eagerWorkerTasks):
+    # eagerWorkerTasks: creating a deposition fires `deposition.created`, whose
+    # JSONForms handler enqueues an AIMD portal task with .delay(). Girder
+    # deployments always have a broker -- core needs one to delete a folder --
+    # but the test environment has none, so pytest_girder's fixture runs tasks
+    # inline instead. The task then does what it does in production without a
+    # token: logs and returns. girder/test/test_size.py uses the same fixture
+    # for core's own deleteFolderTask.
+    #
+    # Nothing here stubs the IGSN registry: get_client() already returns None
+    # while jsonforms.igsn_service_url is empty, which is the default, so the
+    # local PrefixCounter allocates identifiers exactly as in a local install.
     from girder_jsonforms.models.deposition import Deposition
-    monkeypatch.setattr('girder_jsonforms.models.deposition.get_client', lambda: None)
     if request.node.name not in {'test_registration_uses_model_and_is_idempotent', 'test_register_requires_parent_write'}:
         Deposition().create_deposition(
             {'titles': [{'title': 'Aluminum foil'}], 'relatedIdentifiers': [],
@@ -86,12 +96,10 @@ def test_validation_and_dashboard_acl(server, enabled, user):
     assertStatus(server.request('/flycut/options', user=user), 403)
 
 
-def test_registration_uses_model_and_is_idempotent(server, enabled, user, fsAssetstore, monkeypatch):
+def test_registration_uses_model_and_is_idempotent(server, enabled, user, fsAssetstore):
     from girder_jsonforms.models.deposition import Deposition
     from girder_jsonforms.settings import PluginSettings
     from girder.models.setting import Setting
-    # Local mode only: no external registry calls in tests.
-    monkeypatch.setattr('girder_jsonforms.models.deposition.get_client', lambda: None)
     Setting().set(PluginSettings.IGSN_PREFIX, '10.12345')
     model = Deposition()
     parent = model.create_deposition(
@@ -115,9 +123,8 @@ def test_registration_uses_model_and_is_idempotent(server, enabled, user, fsAsse
     assert model.collection.count_documents({'igsn': child['igsn']}) == 1
 
 
-def test_register_requires_parent_write(server, enabled, user, admin, fsAssetstore, monkeypatch):
+def test_register_requires_parent_write(server, enabled, user, admin, fsAssetstore):
     from girder_jsonforms.models.deposition import Deposition
-    monkeypatch.setattr('girder_jsonforms.models.deposition.get_client', lambda: None)
     Deposition().create_deposition(
         {'titles': [{'title': 'Restricted foil'}], 'creators': [{'name': 'Admin'}],
          'publisher': {'name': 'Lab'}, 'publicationYear': '2026', 'relatedIdentifiers': [], 'alternateIdentifiers': [{'alternateIdentifier': 'foilIGSN', 'alternateIdentifierType': 'Local'}]},

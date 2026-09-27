@@ -61,10 +61,8 @@ jobs:
           node tests/workflow.cjs
           node tests/complete_workflow.cjs
 
-  # Slow lane: the Python suite needs MongoDB and girder-jsonforms from its
-  # `igsn` branch, which setup.py declares as a direct git reference, so pip
-  # fetches it unaided. No patch is involved any more -- see
-  # docs/JSONFORMS_COMPATIBILITY.md.
+  # Slow lane: the Python suite. Mirrors girder-jsonforms' own workflow, which
+  # is the reference for how this dependency has to be set up.
   pytest:
     name: Server tests
     runs-on: ubuntu-24.04
@@ -73,6 +71,15 @@ jobs:
         image: mongo:4.4
         ports:
           - 27017:27017
+      # girder-jsonforms takes a Redis lock while ensuring its projects
+      # collection at load time. It logs and proceeds when Redis is missing,
+      # but its own CI runs one, so match that rather than relying on the
+      # fallback path. Note there is deliberately no message broker here --
+      # see the eagerWorkerTasks note in tests/test_api.py.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -85,10 +92,29 @@ jobs:
         with:
           node-version: 22
 
+      # girder-jsonforms' load() registers static content and md5-hashes every
+      # file, so its frontend must be built before any test touches the server
+      # fixture -- and a pip install from git cannot build it, because the
+      # package ships only prebuilt assets that a git checkout does not carry.
+      # This is why the dependency is installed from a checkout rather than by
+      # letting pip resolve the reference in setup.py.
+      - name: Install girder-jsonforms from the igsn branch
+        run: |
+          git clone -b igsn https://github.com/Xarthisius/girder-jsonforms.git ../girder-jsonforms
+          cd ../girder-jsonforms/girder_jsonforms/web_client
+          npm ci
+          npm run build
+          cd "$GITHUB_WORKSPACE"
+          python -m pip install --upgrade pip
+          python -m pip install -e ../girder-jsonforms
+
+      # --no-deps: a plain `pip install .` re-resolves the
+      # `girder-jsonforms @ git+...@igsn` reference and would replace the built
+      # editable install above with an unbuilt one from git.
       - name: Install the plugin and its dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install ./vendor/girder-dashboards .
+          python -m pip install ./vendor/girder-dashboards
+          python -m pip install --no-deps .
           python -m pip install -r requirements-dev.txt
 
       # girder-dashboards' load() md5-hashes every file it registers as static
