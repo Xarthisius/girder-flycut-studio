@@ -26,13 +26,13 @@ View.extend = function (spec) {
 };
 
 const girder = {
-    views: {View},
-    rest: {restRequest: () => Promise.reject(new Error('not called at load'))},
-    auth: {getCurrentUser: () => null},
-    plugins: {dashboards: {registerDashboard: (key, spec) => registered.push([key, spec])}}
+    views: { View },
+    rest: { restRequest: () => Promise.reject(new Error('not called at load')) },
+    auth: { getCurrentUser: () => null },
+    plugins: { dashboards: { registerDashboard: (key, spec) => registered.push([key, spec]) } }
 };
 
-vm.runInNewContext(bundle, {girder, document: undefined, window: undefined});
+vm.runInNewContext(bundle, { girder, document: undefined, window: undefined });
 
 assert.equal(registered.length, 1, 'the bundle must register exactly one dashboard');
 const [key, spec] = registered[0];

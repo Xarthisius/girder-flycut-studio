@@ -62,24 +62,6 @@
     }
   ],
   "rules": {
-    "arrow-parens": "off",
-    "block-spacing": "off",
-    "brace-style": "off",
-    "comma-spacing": "off",
-    "comma-style": "off",
-    "curly": "off",
-    "indent": "off",
-    "key-spacing": "off",
-    "keyword-spacing": "off",
-    "no-floating-decimal": "off",
-    "no-multiple-empty-lines": "off",
-    "object-curly-newline": "off",
-    "object-curly-spacing": "off",
-    "object-property-newline": "off",
-    "padded-blocks": "off",
-    "quotes": "off",
-    "space-before-blocks": "off",
-    "space-infix-ops": "off",
     "promise/no-native": "off"
   }
 }
