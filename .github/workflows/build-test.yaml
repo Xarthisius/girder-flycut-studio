@@ -111,10 +111,14 @@ jobs:
       # --no-deps: a plain `pip install .` re-resolves the
       # `girder-jsonforms @ git+...@igsn` reference and would replace the built
       # editable install above with an unbuilt one from git.
+      #
+      # -e: without it the tests import the copy in site-packages while
+      # --cov=girder_flycut measures the working tree, so coverage reports 0%
+      # on a fully passing run. Editable makes them the same files.
       - name: Install the plugin and its dependencies
         run: |
           python -m pip install ./vendor/girder-dashboards
-          python -m pip install --no-deps .
+          python -m pip install --no-deps -e .
           python -m pip install -r requirements-dev.txt
 
       # girder-dashboards' load() md5-hashes every file it registers as static
@@ -131,7 +135,8 @@ jobs:
                  --mongo-uri mongodb://127.0.0.1:27017 \
                  --cov=girder_flycut \
                  --cov-report=term \
-                 --cov-report=xml
+                 --cov-report=xml \
+                 --cov-fail-under=80
 
       - name: Upload coverage
         if: always()
