@@ -9,10 +9,10 @@ Run the commands below from the repository root.
 
 ## Frontend
 
-Edit `girder_flycut/web_client/` — `builder.js` for the form, `main.js` for the
-workflow shell, `core/` for logic with no DOM in it — plus `girder_flycut/workflow.html`
-and `workflow.css`. `config_builder/static/` holds only the markup and stylesheet the
-generator still slices; it is no longer runnable and Phase 4 deletes it. Then:
+Everything lives in `girder_flycut/web_client/` now: `builder.js` for the form,
+`main.js` for the workflow shell, `core/` for logic with no DOM in it,
+`templates/dashboard.html` and `styles/dashboard.css` for the markup and stylesheet,
+which `main.js` imports as strings. Then:
 
 ```sh
 npm ci          # once
@@ -21,16 +21,13 @@ npm run build   # generate sources, then bundle with Vite
 npm test        # the four .cjs suites, including tests/bundle.cjs
 ```
 
-`npm run build` does three things: checks `setup.py` and `package.json` agree on a
-version, runs `girder_flycut/web_client/build/generate-sources.mjs`, and bundles with
-Vite into `girder_flycut/web_client/dist/`. Neither `generated/` nor `dist/` is committed;
-CI builds both, and the wheel ships only `dist/girder-plugin-flycut.umd.cjs`.
+`npm run build` checks that `setup.py` and `package.json` agree on a version, then
+bundles with Vite into `girder_flycut/web_client/dist/`, which is not committed. CI builds
+it and the wheel ships only `dist/girder-plugin-flycut.umd.cjs`.
 
-The generator derives the markup, the scoped stylesheet and the configuration builder from
-`config_builder/static/` by substituting literal strings, and asserts a match count for
-each one — markup that moves fails the build instead of quietly dropping a control. It also
-checks that `main.js` and the generated builder agree on their 15 shared bindings, since a
-mismatch would hand the shell `undefined` rather than raising.
+There is no source generator any more. The markup and stylesheet were derived from
+`config_builder/static/` by matching literal strings until Phase 4a; that directory is
+deleted and the files are plain sources here.
 
 `girder_flycut/web_client/core/` is the DOM-free core: `assess.js`, `laser.js`,
 `records.js` and `validate.js` are reachable without a document, a server or the

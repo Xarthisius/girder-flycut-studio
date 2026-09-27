@@ -6,9 +6,8 @@
   "type": "module",
   "license": "BSD-3-Clause",
   "scripts": {
-    "generate": "node girder_flycut/web_client/build/generate-sources.mjs",
-    "build": "npm run check-version && npm run generate && vite build",
-    "dev": "npm run generate && vite build --watch",
+    "build": "npm run check-version && vite build",
+    "dev": "vite build --watch",
     "lint": "eslint .",
     "format": "eslint --fix .",
     "test": "node tests/status.mjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs",

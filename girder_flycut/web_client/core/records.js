@@ -24,7 +24,7 @@ export function byNewest(a, b) {
  * `escapeHtml` and `savedTime` come from the caller because both are DOM-bound
  * in the shell.
  */
-export function groupedOptions(records, {disableRegistered = false, escapeHtml, savedTime} = {}) {
+export function groupedOptions(records, { disableRegistered = false, escapeHtml, savedTime } = {}) {
     const option = (record) =>
         `<option value="${escapeHtml(record._id)}">${escapeHtml(record.name)} · ` +
         `${escapeHtml(savedTime(record))} · ${escapeHtml(record.status)}</option>`;

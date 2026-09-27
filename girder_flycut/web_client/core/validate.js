@@ -15,10 +15,10 @@ export const UNACKNOWLEDGED =
  */
 export function exportDecision(status, acknowledged) {
     if (!status.complete) {
-        return {ok: false, message: INCOMPLETE, focus: 'status'};
+        return { ok: false, message: INCOMPLETE, focus: 'status' };
     }
     if (status.warnings.length && !acknowledged) {
-        return {ok: false, message: UNACKNOWLEDGED, focus: 'acknowledgement'};
+        return { ok: false, message: UNACKNOWLEDGED, focus: 'acknowledgement' };
     }
-    return {ok: true, message: null, focus: null};
+    return { ok: true, message: null, focus: null };
 }

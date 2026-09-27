@@ -1,0 +1,173 @@
+<header class="topbar">
+    <a class="brand" href="#" id="studioHomeLink" aria-label="Flyer Studio home">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span><b>FLYER STUDIO</b><small id="currentPageLabel">Home</small></span>
+    </a>
+    <div class="top-actions hidden" id="builderActions">
+      <button id="saveState" type="button" class="save-state" aria-controls="statusPanel"><span></span> Incomplete</button>
+      <input id="jsonFile" type="file" accept="application/json,.json" hidden>
+      <button id="resetBtn" class="button ghost" type="button">Delete</button><button id="submitConfigBtn" class="button primary" type="button">Submit</button>
+    </div>
+  </header><section id="workflowHome" class="workflow-home">
+  <h1>Choose a module</h1>
+  <button id="adminSettingsBtn" class="button ghost hidden" type="button">Admin settings</button>
+  <div class="workflow-cards workflow-choices">
+    <button id="configurationStepBtn" class="workflow-choice" type="button"><span class="step-number">01</span><strong>Configuration</strong><small>Build, edit, or view configurations.</small></button>
+    <button id="lightburnStepBtn" class="workflow-choice" type="button"><span class="step-number">02</span><strong>Generation</strong><small>Generate stack identity files from submitted configs</small></button>
+    <button id="registerBtn" class="workflow-choice" type="button"><span class="step-number">03</span><strong>Registration</strong><small>Register stack IGSN from file identity files.</small></button>
+    <button id="completeWorkflowBtn" class="workflow-choice" type="button"><span class="step-number">1–3</span><strong>Complete Workflow</strong><small>Configure a stack, then submit to generate files and register its IGSN automatically.</small></button>
+  </div>
+</section>
+<section id="configurationPicker" class="workflow-home hidden">
+  <button id="configPickerBackBtn" class="button ghost" type="button" aria-label="Back to workflow">←</button>
+  <h1 id="configurationPickerTitle">Configuration</h1>
+  <p id="completeWorkflowHint" class="workflow-intro hidden">After submission, files are generated and the stack IGSN is registered automatically. Keep this page open until completion.</p>
+  <label class="field saved-picker">Saved configuration
+    <select id="savedConfigs"><option value="">New configuration</option></select>
+  </label>
+  <label id="presetPicker" class="field saved-picker hidden">Preset<select id="presetSelect" disabled><option value="">No preset</option></select></label>
+  <button id="buildConfigBtn" class="button primary picker-continue" type="button">Build config</button>
+</section>
+<section id="lightburnPicker" class="workflow-home hidden">
+  <button id="lightburnPickerBackBtn" class="button ghost" type="button" aria-label="Back to workflow">←</button>
+  <h1>Generation</h1>
+  <label class="field saved-picker">Submitted configuration
+    <select id="submittedConfigs"><option value="">Choose a submitted configuration</option></select>
+  </label>
+  <p id="filesHint" class="field-note"></p>
+  <a id="generatedFolderLink" class="button ghost hidden" target="_blank" rel="noopener">View files ↗</a><button id="deleteFilesBtn" class="button ghost hidden" type="button">Delete generated files</button>
+  <button id="generateBtn" class="button primary picker-continue" type="button" disabled>Generate files</button>
+</section>
+<section id="registrationPicker" class="workflow-home hidden">
+  <button id="registrationBackBtn" class="button ghost" type="button" aria-label="Back to workflow">←</button>
+  <h1>Registration</h1>
+  <p class="workflow-intro">Create a stack IGSN linked to the selected foil IGSN in Girder.</p>
+  <label class="field saved-picker">Generated configuration<select id="registrationConfigs"></select></label>
+  <p id="registrationHint" class="field-note"></p>
+  <a id="viewIgsnLink" class="button ghost hidden" target="_blank" rel="noopener">View IGSN ↗</a>
+  <button id="registerStackBtn" class="button primary picker-continue" type="button">Register stack IGSN</button>
+</section>
+<p id="runStatus" role="status" aria-live="polite"></p>
+<div id="artifacts" class="artifact-links"></div>
+
+<section id="adminSettingsScreen" class="workflow-home settings-screen hidden">
+  <button id="adminSettingsBack" class="button ghost" type="button">← Back to workflow</button>
+  <h1>Flyer Studio settings</h1>
+  <p>Settings apply to new configurations and IGSNs. Existing files keep their location and permissions.</p>
+  <h2>Shared workspace</h2>
+  <label class="field">Collection<select id="workspaceCollection"></select></label>
+  <button id="browseWorkspaceBtn" class="button ghost" type="button">Choose workspace folder</button>
+  <label class="field">Workspace path<input id="workspacePath" placeholder="/collection/Flyer Studio/Workspace"></label>
+  <p class="field-note">Choose a folder inside a collection. Collaborators also need access to that destination; the settings below do not change the collection’s permissions.</p>
+  <h2>Users and groups</h2>
+  <label class="field">Find a user or group<input id="principalSearch" placeholder="Search by name"></label>
+  <button id="findPrincipalsBtn" class="button ghost" type="button">Search</button>
+  <label class="field">Results<select id="principalResults"></select></label>
+  <label class="field">Add to<select id="principalRole"><option value="creators">IGSN creators</option><option value="owners">Owners</option><option value="editors">Editors</option><option value="viewers">Viewers</option></select></label>
+  <button id="addPrincipalBtn" class="button ghost" type="button">Add user or group</button>
+  <div id="policyLists"></div>
+  <p class="field-note">Creators are attribution only. Groups appear as organizational creators. Owners can manage access; editors can modify data; viewers can read. The highest matching access level wins.</p>
+  <h2>Acting user</h2>
+  <label class="field checkbox-field"><input id="creators_include_user" type="checkbox">Include the registrant as an IGSN creator</label>
+  <label class="field checkbox-field"><input id="owners_include_user" type="checkbox">Include the acting user as an owner</label>
+  <label class="field checkbox-field"><input id="editors_include_user" type="checkbox">Include the acting user as an editor</label>
+  <label class="field checkbox-field"><input id="viewers_include_user" type="checkbox">Include the acting user as a viewer</label>
+  <h2>Visibility</h2>
+  <label class="field checkbox-field"><input id="public_igsn" type="checkbox">Make new stack IGSNs public</label>
+  <label class="field checkbox-field"><input id="public_files" type="checkbox">Make new configuration folders and files public</label>
+  <p class="field-note">IGSN access uses the same owners, editors, and viewers. Parent foil permissions remain unchanged.</p>
+  <button id="saveAdminSettingsBtn" class="button primary" type="button">Save settings</button>
+  <p id="settingsStatus" role="status"></p>
+</section>
+<div id="builderScreen" class="hidden"><nav class="builder-nav"><button id="backWorkflowBtn" type="button" class="button ghost" aria-label="Back to workflow" title="Back to workflow">←</button><input id="saveAsName" type="text" placeholder="Save as…" aria-label="Save as" maxlength="160"><button id="saveGirderBtn" class="button primary" type="button">Save</button><span id="builderMode" aria-live="polite"></span><button id="editCopyBtn" type="button" class="button ghost hidden">Edit a copy</button></nav>
+  
+
+  <main class="workspace">
+    <section class="form-pane" aria-label="Configuration form">
+      <div class="intro">
+        <h1>Configure Flyer Stack</h1>
+      </div>
+
+      <form id="configForm" novalidate><fieldset id="configFields">
+        <details open class="form-section">
+          <summary><span><b>01</b> Run Parameters <span id="runRequiredMarker" class="section-required-marker hidden" aria-label="Required fields incomplete">*</span></span><span class="chevron">⌃</span></summary>
+          <div class="section-body two-col">
+            <label class="field" for="stackid"><span class="field-label">Stack ID <span class="required">*</span> <button type="button" class="help" data-tip="A unique stack identifier: a 5-character Crockford ID or legacy F### / F#### ID. Other values require confirmation." aria-label="Stack ID help">?</button></span>
+              <div class="template-picker-row"><input id="stackid" name="stackid" placeholder="e.g. 00005" required><button id="autoStackIdBtn" class="button ghost" type="button" aria-label="Assign lowest available Stack ID" aria-pressed="false" title="Assign lowest available Stack ID">AUTO</button></div>
+              <small class="error" id="stackidError"></small>
+            </label>
+            <label class="field" for="operator"><span class="field-label">Operator <button type="button" class="help" data-tip="The person preparing and running this stack." aria-label="Operator help">?</button></span>
+              <span class="input-wrap"><input id="operator" name="operator" list="operatorNames" autocomplete="off" placeholder="Name or initials"></span>
+              <datalist id="operatorNames"></datalist>
+              <small class="error" id="operatorError"></small>
+            </label>
+            <label class="field"><span class="field-label">Foil material <span class="required">*</span></span>
+              <select id="foilMaterial" name="foil_material"><option value="">Loading materials…</option></select>
+              <small id="materialMeta" class="field-note">Foil IGSNs from Girder</small>
+            </label>
+            <label class="field" for="template"><span class="field-label">Template <span class="required">*</span> <button type="button" class="help" aria-label="Template help" data-tip="Choose the LightBurn layout whose flyer positions and laser layers will be configured.">?</button></span>
+              <div class="template-picker-row"><select id="template" name="template"><option value="">Loading templates…</option></select><button id="browseTemplateBtn" type="button" class="button ghost" aria-label="Choose template from portal" title="Choose template from portal">+</button></div>
+              <small id="templateMeta" class="field-note"></small>
+            </label>
+          </div>
+        </details>
+
+        <details open class="form-section">
+          <summary><span><b>02</b> Laser Parameters</span><span class="section-count" id="laserCount">1 / 28</span><span class="chevron">⌃</span></summary>
+          <div class="section-body">
+            <h3 class="section-subtitle">Selection style</h3>
+            <div class="assignment-controls">
+              <label class="field checkbox-field" for="allowWraparound"><input id="allowWraparound" type="checkbox" checked> <span class="field-label">Wraparound <button type="button" class="help" aria-label="Wraparound help" data-tip="Start again at the first setting when the template has more layers than the listed settings cover.">?</button></span></label>
+              <label id="repeatWrap" class="field" for="repeatX"><span class="field-label">Repeat each setting for <button type="button" class="help" aria-label="Repeat each setting help" data-tip="Apply each listed setting to this many consecutive template layers before moving to the next setting.">?</button></span>
+                <span class="repeat-input"><input id="repeatX" name="repeat_x" type="number" min="1" max="10000" step="1" value="1"><span>layers</span></span>
+              </label>
+            </div>
+            <h3 class="section-subtitle">Parameters</h3>
+            <div id="laserList" class="laser-list"></div>
+            <button id="addLaserBtn" class="button dashed" type="button"><span>＋</span> Add laser setting</button>
+            <div class="excel-import">
+              <input id="excelFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+              <button id="importExcelBtn" class="button ghost" type="button"><span aria-hidden="true">⇧</span> Import from Excel</button>
+              <small id="excelStatus"></small>
+            </div>
+            <p id="laserError" class="section-error" role="alert"></p>
+          </div>
+        </details>
+
+        <details open class="form-section">
+          <summary><span><b>03</b> Custom Fields</span><span class="section-count" id="customCount">0 fields</span><span class="chevron">⌃</span></summary>
+          <div class="section-body">
+            <div id="customList" class="custom-list"></div>
+            <button id="addCustomBtn" class="button dashed" type="button"><span>＋</span> Add custom field</button>
+            <div id="fieldRecommendations" class="field-recommendations"></div>
+            <datalist id="customFieldNames"></datalist>
+            <p id="customError" class="section-error" role="alert"></p>
+          </div>
+        </details>
+      </fieldset></form>
+    </section>
+
+    <aside class="viewer-pane" aria-label="Configuration viewer">
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" data-tab="preview">Preview</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="json">JSON</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="status">Status</button>
+      </div>
+      <section id="statusPanel" class="viewer-panel status-panel" role="tabpanel">
+        <h2 id="statusSummary">Incomplete</h2>
+        <ul id="statusViolations"></ul>
+        <label id="validationAckLabel" class="validation-ack hidden"><input id="validationAck" type="checkbox"> I have reviewed and accept the validation warnings.</label>
+      </section>
+      <section id="jsonPanel" class="viewer-panel" role="tabpanel">
+        <div class="viewer-toolbar"><span>config.json</span><button id="copyBtn" type="button">Copy</button></div>
+        <pre id="jsonOutput" tabindex="0" aria-label="Configuration JSON" aria-live="polite"></pre>
+      </section>
+      <section id="previewPanel" class="viewer-panel active" role="tabpanel">
+        <div class="preview-head"><div><span>LIGHTBURN RECREATION</span><strong id="previewTitle">Select a template</strong></div><div class="zoom-control"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomLabel">100%</span><button id="zoomIn" aria-label="Zoom in">+</button></div></div>
+        <div id="previewStage" class="preview-stage"><div id="canvas" class="canvas"><div class="empty-preview">Choose a template to see its flyer layout.</div></div></div>
+        <div class="legend"><span id="flyerTotal">0 flyers</span></div>
+      </section>
+    </aside>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  </div>
