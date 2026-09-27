@@ -16,6 +16,7 @@ import {
     resolveLaserForLayer as resolveLayer
 } from './core/laser.js';
 import { exportDecision } from './core/validate.js';
+import { escapeHtml } from './util.js';
 
 export default async function createBuilder({ mount, currentUser, fetch }) {
     // The core takes the existing entries explicitly; the builder always
@@ -63,8 +64,6 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
         const select = $(selector);
         select.innerHTML = `<option value="">${placeholder}</option>` + entries.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}${Number.isInteger(item.layer_count) ? ` · ${item.layer_count} layers` : ''}</option>`).join('');
     }
-
-    function escapeHtml(value = '') { const div = document.createElement('div'); div.textContent = value; return div.innerHTML; }
 
     const usedLaserCount = (layerCount) =>
         countUsed(state.laserParams, layerCount, Number($('#repeatX').value));
@@ -421,5 +420,5 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
         }
     });
 
-    return { $, changeTemplate, cleanupTooltips, clearValidation, configObject, confirmExport, escapeHtml, finalConfigObject, importJson, makeLaser, renderCustomFields, state, toast, updateAll, updateAssignmentUI };
+    return { $, changeTemplate, cleanupTooltips, clearValidation, configObject, confirmExport, finalConfigObject, importJson, makeLaser, renderCustomFields, state, toast, updateAll, updateAssignmentUI };
 }

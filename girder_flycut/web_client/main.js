@@ -16,7 +16,8 @@ import createBuilder from './builder.js';
 import { groupedOptions, selectableConfigs } from './core/records.js';
 import { workflowState } from './core/workflow.js';
 import './styles/dashboard.css';
-import adminSettings from './templates/adminSettings.html?raw';
+import { escapeHtml, request } from './util.js';
+import AdminSettingsView from './views/AdminSettingsView.js';
 import builder from './templates/builder.html?raw';
 import configurationPicker from './templates/configurationPicker.html?raw';
 import lightburnPicker from './templates/lightburnPicker.html?raw';
@@ -29,17 +30,10 @@ import workflowHome from './templates/workflowHome.html?raw';
 // construction, so every screen has to be present before createBuilder runs.
 const SCREENS = [
     topbar, workflowHome, configurationPicker, lightburnPicker,
-    registrationPicker, statusBar, adminSettings, builder
+    registrationPicker, statusBar, builder
 ];
 const $$ = girder.$;
 const View = girder.views.View;
-const request = async (url, method = 'GET', data) => {
-    try {
-        return await girder.rest.restRequest({ url: `flycut/${url}`, method, data, error: null });
-    } catch (error) {
-        throw new Error(error.responseJSON?.message || 'Girder request failed.');
-    }
-};
 const Dashboard = View.extend({
     render: function () {
         this.el.replaceChildren();
@@ -78,11 +72,10 @@ const Dashboard = View.extend({
             return { ok: true, json: async () => result };
         };
         // The builder owns the form; these are the bindings the workflow
-        // chrome below needs from it. build/generate-sources.mjs checks that this
-        // list and the builder's exports agree.
+        // chrome below needs from it.
         const {
             $, changeTemplate, cleanupTooltips, clearValidation, configObject,
-            confirmExport, escapeHtml, finalConfigObject, importJson, makeLaser,
+            confirmExport, finalConfigObject, importJson, makeLaser,
             renderCustomFields, state, toast, updateAll, updateAssignmentUI
         } = await createBuilder({ mount, currentUser, fetch });
         let busy = false;
@@ -209,7 +202,10 @@ const Dashboard = View.extend({
                 if (readOnly) { event.preventDefault(); event.stopImmediatePropagation(); }
             }, true);
         }
-        const act = (id, fn) => $(id).addEventListener('click', async () => {
+        // One request at a time, with the four controls the busy flag does not
+        // reach disabled for its duration. Split from act() so a child view can
+        // run under the same guard without owning a listener.
+        const guard = (fn) => async () => {
             if (busy) return;
             busy = true;
             $('#saveGirderBtn').disabled = true;
@@ -225,7 +221,8 @@ const Dashboard = View.extend({
                 $('#resetBtn').disabled = false;
                 renderHome();
             }
-        });
+        };
+        const act = (id, fn) => $(id).addEventListener('click', guard(fn));
         const addPortalTemplate = (detail) => {
             if (!state.templates.some((entry) => entry.id === detail.id)) {
                 state.templates.push(detail);
@@ -294,77 +291,19 @@ const Dashboard = View.extend({
             $('#stackid').readOnly = false;
             $('#autoStackIdBtn').setAttribute('aria-pressed', 'false');
         });
-        let adminPolicy = null;
-        let principalResults = [];
-        const policyBooleans = ['creators_include_user', 'owners_include_user', 'editors_include_user', 'viewers_include_user', 'public_igsn', 'public_files'];
-        const renderPolicyLists = () => {
-            $('#policyLists').innerHTML = ['creators', 'owners', 'editors', 'viewers'].map((role) => `<h3>${role[0].toUpperCase() + role.slice(1)}</h3><ul>${adminPolicy[role].map((ref, index) => `<li>${escapeHtml(ref.label || ref.id)} (${ref.type}) <button type="button" class="button ghost" data-role="${role}" data-index="${index}">Remove</button></li>`).join('') || '<li>None</li>'}</ul>`).join('');
-        };
+        // The admin screen is its own view. The shell keeps only what crosses
+        // the boundary: the button that opens it, screen visibility, and a
+        // refresh once the policy it governs has changed.
         $('#adminSettingsBtn').classList.add('hidden');
-        $('#adminSettingsBack').addEventListener('click', home);
-        $('#workspacePath').addEventListener('input', () => { if (adminPolicy) adminPolicy.workspace_folder_id = ''; });
-        $('#policyLists').addEventListener('click', (event) => {
-            const button = event.target.closest('button[data-role]');
-            if (!button) return;
-            adminPolicy[button.dataset.role].splice(Number(button.dataset.index), 1);
-            renderPolicyLists();
+        const adminSettingsView = new AdminSettingsView({
+            parentView: this,
+            guard,
+            onSaved: refresh
         });
-        const searchPrincipals = async () => {
-            principalResults = await request('settings/principals', 'GET', { q: $('#principalSearch').value });
-            $('#principalResults').innerHTML = principalResults.map((ref, index) => `<option value="${index}">${escapeHtml(ref.label)} (${ref.type})</option>`).join('');
-        };
-        act('#adminSettingsBtn', async () => {
-            const result = await request('settings');
-            adminPolicy = result.settings;
-            $('#workspacePath').value = adminPolicy.workspace_path;
-            $('#workspaceCollection').innerHTML = result.collections.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-            if (result.workspaceCollectionId) $('#workspaceCollection').value = result.workspaceCollectionId;
-            policyBooleans.forEach((key) => { $('#' + key).checked = adminPolicy[key]; });
-            renderPolicyLists();
-            await searchPrincipals();
-            $('#settingsStatus').textContent = '';
-            showScreen('adminSettingsScreen');
-        });
-        act('#findPrincipalsBtn', searchPrincipals);
-        act('#addPrincipalBtn', async () => {
-            const ref = principalResults[Number($('#principalResults').value)];
-            if (!ref) return;
-            const role = $('#principalRole').value;
-            if (!adminPolicy[role].some((entry) => entry.id === ref.id && entry.type === ref.type)) adminPolicy[role].push(ref);
-            renderPolicyLists();
-        });
-        act('#browseWorkspaceBtn', async () => {
-            const id = $('#workspaceCollection').value;
-            if (!id) throw new Error('Create a collection and workspace folder in Girder first.');
-            const root = new girder.models.CollectionModel({ _id: id });
-            await root.fetch();
-            let selected;
-            const picker = new girder.views.widgets.BrowserWidget({
-                parentView: this,
-                root,
-                showItems: false,
-                titleText: 'Choose a workspace folder',
-                submitText: 'Use folder',
-                validate: async (model) => {
-                    if (model?.resourceName !== 'folder') throw 'Choose a folder inside the collection.';
-                    selected = await request('settings/workspace', 'GET', { id: model.id });
-                }
-            });
-            this.listenTo(picker, 'g:saved', () => {
-                adminPolicy.workspace_folder_id = selected.id;
-                $('#workspacePath').value = selected.path;
-            });
-            picker.setElement(document.querySelector('#g-dialog-container')).render();
-        });
-        act('#saveAdminSettingsBtn', async () => {
-            adminPolicy.workspace_path = $('#workspacePath').value.trim();
-            policyBooleans.forEach((key) => { adminPolicy[key] = $('#' + key).checked; });
-            const result = await request('settings', 'PUT', { settings: JSON.stringify(adminPolicy) });
-            adminPolicy = result.settings;
-            $('#workspacePath').value = adminPolicy.workspace_path;
-            $('#settingsStatus').textContent = 'Settings saved. New data will use this policy.';
-            await refresh();
-        });
+        mount.insertBefore(adminSettingsView.render().el, $('#builderScreen'));
+        this.listenTo(adminSettingsView, 'g:open', () => showScreen('adminSettingsScreen'));
+        this.listenTo(adminSettingsView, 'g:close', home);
+        $('#adminSettingsBtn').addEventListener('click', () => adminSettingsView.open());
         act('#configurationStepBtn', () => configure(false));
         act('#completeWorkflowBtn', () => configure(true));
         act('#lightburnStepBtn', async () => { await refresh(); showScreen('lightburnPicker'); });
