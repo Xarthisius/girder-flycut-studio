@@ -1,10 +1,14 @@
-/* eslint-disable no-new-func, no-return-assign -- these suites extract functions
-   from app.js by string-slicing and eval them. Tracked as issue D1; Phase 3
-   extracts the same functions into importable modules and this disappears. */
+/* eslint-disable no-new-func, no-return-assign -- the submit flow and configure() are still
+   sliced out of main.js and eval'd: they are DOM orchestration over the
+   shell's closure, which Phase 4 turns into Backbone views. The pure
+   logic they used to carry is imported from ../girder_flycut/web_client/core/
+   now. Note the slice boundaries include indentation, so moving that code
+   moves them. Remainder of issue D1. */
 const assert = require('node:assert/strict');
+
 const fs = require('node:fs');
-// NOTE: these boundaries include indentation, so de-indenting main.js moves
-// them. That is issue D1; Phase 3 replaces the slicing with real imports.
+
+const {selectableConfigs} = require('../girder_flycut/web_client/core/records.js');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../girder_flycut/web_client/main.js'), 'utf8');
 const body = source.split("act('#submitConfigBtn', async () => {")[1].split('\n        });')[0];
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -46,8 +50,7 @@ async function run(automated, failure, valid = true) {
     console.log('Complete workflow: success, manual submission, validation gate, and both failure recovery stages passed.');
 })().catch(error => {console.error(error); process.exitCode=1;});
 
-const selectionExpression = source.split('const selectableConfigs = records => ')[1].split(';')[0];
-const select = new Function('records', 'completeWorkflow', 'return ' + selectionExpression);
+const select = selectableConfigs;
 const records = [
     {_id:'draft', status:'draft', canEdit:true},
     {_id:'read-only-draft', status:'draft', canEdit:false},

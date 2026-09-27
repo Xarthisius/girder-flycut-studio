@@ -56,7 +56,7 @@ jobs:
       # the pieces in the right places.
       - name: Frontend tests
         run: |
-          node tests/status.cjs
+          node tests/status.mjs
           node tests/workflow.cjs
           node tests/complete_workflow.cjs
           node tests/bundle.cjs

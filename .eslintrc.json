@@ -47,6 +47,18 @@
       "parserOptions": {
         "sourceType": "script"
       }
+    },
+    {
+      "files": [
+        "tests/**/*.mjs"
+      ],
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "env": {
+        "browser": false,
+        "node": true
+      }
     }
   ],
   "rules": {

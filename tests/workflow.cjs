@@ -1,12 +1,16 @@
-/* eslint-disable no-new-func, no-return-assign -- these suites extract functions
-   from app.js by string-slicing and eval them. Tracked as issue D1; Phase 3
-   extracts the same functions into importable modules and this disappears. */
+/* eslint-disable no-new-func, no-return-assign -- renderHome and the unsaved-change guard are still
+   sliced out of main.js and eval'd: they are DOM orchestration over the
+   shell's closure, which Phase 4 turns into Backbone views. The pure
+   logic they used to carry is imported from ../girder_flycut/web_client/core/
+   now. Note the slice boundaries include indentation, so moving that code
+   moves them. Remainder of issue D1. */
 /* Test workflow state decisions without a browser or production services. */
 const assert = require('node:assert/strict');
+
 const fs = require('node:fs');
 const path = require('node:path');
-// NOTE: these boundaries include indentation, so de-indenting main.js moves
-// them. That is issue D1; Phase 3 replaces the slicing with real imports.
+
+const {groupedOptions} = require('../girder_flycut/web_client/core/records.js');
 const source = fs.readFileSync(path.join(__dirname, '../girder_flycut/web_client/main.js'), 'utf8');
 const body = source.split('const renderHome = () => {')[1].split('\n        const refresh =')[0].replace(/};\s*$/, '');
 function render(activeConfig, busy = false) {
@@ -63,15 +67,16 @@ assert(nodes['#presetSelect'].disabled);
 assert(render(generated)['#viewIgsnLink'].classes.has('hidden'));
 console.log('Registration link and disabled presets passed.');
 
-const groupBody = source.split('const groupedOptions = (records, disableRegistered = false) => ')[1].split(".join('');")[0] + ".join('')";
-const grouped = new Function('records','option','escapeHtml','const disableRegistered = false; return ' + groupBody);
-const ordered = grouped([
+const ordered = groupedOptions([
  {_id:'old',status:'draft',savedAt:'2026-01-01'},
  {_id:'registered',status:'registered',savedAt:'2026-03-01'},
  {_id:'new',status:'draft',savedAt:'2026-02-01'},
  {_id:'missing',status:'draft'}
-], r => `[${r._id}]`, value => value);
-assert(ordered.indexOf('[new]') < ordered.indexOf('[old]'));
-assert(ordered.indexOf('[old]') < ordered.indexOf('[missing]'));
-assert(ordered.indexOf('[missing]') < ordered.indexOf('[registered]'));
+], {escapeHtml: value => value, savedTime: record => record.savedAt || ''});
+// The old test stubbed the option renderer so each record rendered as `[id]`;
+// the renderer is part of the core now, so assert on the real markup.
+const at = id => ordered.indexOf(`value="${id}"`);
+assert(at('new') < at('old'), 'newer drafts sort first');
+assert(at('old') < at('missing'), 'records with no timestamp sort last within their stage');
+assert(at('missing') < at('registered'), 'drafts group before registered');
 console.log('Configuration sorting retains categories and sorts newest timestamps first.');

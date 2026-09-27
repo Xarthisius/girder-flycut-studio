@@ -9,8 +9,10 @@ Run the commands below from the repository root.
 
 ## Frontend
 
-Edit `config_builder/static/` for the form and `girder_flycut/web_client/main.js`,
-`girder_flycut/workflow.html` and `workflow.css` for the dashboard integration. Then:
+Edit `girder_flycut/web_client/` — `builder.js` for the form, `main.js` for the
+workflow shell, `core/` for logic with no DOM in it — plus `girder_flycut/workflow.html`
+and `workflow.css`. `config_builder/static/` holds only the markup and stylesheet the
+generator still slices; it is no longer runnable and Phase 4 deletes it. Then:
 
 ```sh
 npm ci          # once
@@ -29,6 +31,12 @@ The generator derives the markup, the scoped stylesheet and the configuration bu
 each one — markup that moves fails the build instead of quietly dropping a control. It also
 checks that `main.js` and the generated builder agree on their 15 shared bindings, since a
 mismatch would hand the shell `undefined` rather than raising.
+
+`girder_flycut/web_client/core/` is the DOM-free core: `assess.js`, `laser.js`,
+`records.js` and `validate.js` are reachable without a document, a server or the
+builder's closure, so `tests/status.mjs` imports them outright. Four slices remain in
+`tests/workflow.cjs` and `tests/complete_workflow.cjs`, all of them DOM orchestration
+over the shell's closure that Phase 4 turns into Backbone views.
 
 `tests/bundle.cjs` loads the built UMD bundle against a stub `girder` global. Vite
 minifies the lib build, so it asserts runtime wiring and payload content rather than

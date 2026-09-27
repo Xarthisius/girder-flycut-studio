@@ -7,7 +7,8 @@
  * bundle. In Phase 1 they were stub declarations a Python script substituted;
  * they are ordinary imports now.
  */
-import createBuilder from './generated/builder.js';
+import createBuilder from './builder.js';
+import {groupedOptions, selectableConfigs} from './core/records.js';
 import styles from './generated/styles.js';
 import template from './generated/template.js';
 
@@ -93,7 +94,6 @@ const Dashboard = View.extend({
             showScreen('configurationPicker');
         };
         const savedTime = record => record?.savedAt ? new Date(record.savedAt).toLocaleString() : '';
-        const selectableConfigs = records => completeWorkflow ? records.filter(record => record.status === 'draft' && record.canEdit !== false) : records;
         const renderHome = () => {
             $('#buildConfigBtn').textContent = activeConfig ? (activeConfig.status === 'draft' ? 'Edit config' : 'View config') : 'Build config';
             $('#buildConfigBtn').disabled = busy;
@@ -123,20 +123,17 @@ const Dashboard = View.extend({
         };
         const refresh = async () => {
             [saved, state.submittedStackIds, state.stackStates] = await Promise.all([request('config'), request('submitted-stacks'), request('stack-states')]);
-            const option = record => `<option value="${escapeHtml(record._id)}">${escapeHtml(record.name)} · ${escapeHtml(savedTime(record))} · ${escapeHtml(record.status)}</option>`;
-            const groupedOptions = (records, disableRegistered = false) => ['draft', 'submitted', 'generated', 'registered'].map(stage => {
-                const entries = records.filter(record => record.status === stage).sort((a, b) => (Date.parse(b.savedAt) || 0) - (Date.parse(a.savedAt) || 0) || String(a._id).localeCompare(String(b._id)));
-                return entries.length ? `<optgroup ${disableRegistered && stage === 'registered' ? 'disabled' : ''} label="${stage[0].toUpperCase() + stage.slice(1)}">${entries.map(option).join('')}</optgroup>` : '';
-            }).join('');
+            const options = (records, disableRegistered = false) =>
+                groupedOptions(records, {disableRegistered, escapeHtml, savedTime});
             const submitted = saved.filter(record => ['submitted', 'generated'].includes(record.status));
-            const configurations = selectableConfigs(saved);
-            $('#savedConfigs').innerHTML = '<option value="">New configuration</option>' + groupedOptions(configurations);
+            const configurations = selectableConfigs(saved, completeWorkflow);
+            $('#savedConfigs').innerHTML = '<option value="">New configuration</option>' + options(configurations);
             const selectedSubmission = $('#submittedConfigs').value;
-            $('#submittedConfigs').innerHTML = '<option value="">' + (submitted.length ? 'Choose a submitted configuration' : 'No submitted configurations') + '</option>' + groupedOptions(submitted, true);
+            $('#submittedConfigs').innerHTML = '<option value="">' + (submitted.length ? 'Choose a submitted configuration' : 'No submitted configurations') + '</option>' + options(submitted, true);
             if (submitted.some(record => record._id === selectedSubmission && record.status !== 'registered')) $('#submittedConfigs').value = selectedSubmission;
             const selectedRegistration = $('#registrationConfigs').value;
             const generated = saved.filter(record => ['generated','registered'].includes(record.status));
-            $('#registrationConfigs').innerHTML = '<option value="">' + (generated.length ? 'Choose a generated configuration' : 'No generated configurations') + '</option>' + groupedOptions(generated);
+            $('#registrationConfigs').innerHTML = '<option value="">' + (generated.length ? 'Choose a generated configuration' : 'No generated configurations') + '</option>' + options(generated);
             if (generated.some(record => record._id === selectedRegistration)) $('#registrationConfigs').value = selectedRegistration;
             if (activeConfig) {
                 activeConfig = saved.find(record => record._id === activeConfig._id) || activeConfig;
