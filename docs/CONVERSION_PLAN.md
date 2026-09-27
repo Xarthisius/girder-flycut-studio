@@ -676,15 +676,16 @@ and a browser pass. No file in the repository is a copy of something that lives 
 Answered by the maintainer on 2026-09-27, after Phase 2. Each is recorded with what it
 changes, because several rewrite the phases that follow.
 
-### 1. Drop the shadow root — Phase 4
+### 1. Drop the shadow root — done in Phase 4b
 
-Move to conventional `g-flycut-` prefixed Stylus. Girder's widgets and Bootstrap 3 compose
-naturally, Pug and Stylus work as the conventions intend, and the stylesheet ships as a
-real `style.css` rather than an inlined string.
+**Done.** The dashboard is ordinary light DOM under a single `.g-flycut-dashboard` class,
+`registerPluginStaticContent` carries `css=['/style.css']`, and the JS bundle lost 22 kB
+when the stylesheet stopped being a string inside it.
 
-**Changes:** `registerPluginStaticContent` gains `css=['/style.css']`; every selector gains
-a prefix in the same pass; `BrowserWidget`'s mount-outside-the-shadow-root workaround stops
-being an exception and becomes the normal case.
+Scoping is by one root class rather than a prefix on each of 288 selectors — which is what
+the conventions actually ask for ("root every rule under a plugin-specific `g-` class") and
+leaves the markup and every `querySelector` in the builder untouched. `tests/bundle.cjs`
+fails if any rule in the built `style.css` escapes that root.
 
 ### 2. JSONForms dependency — resolved in Phase 0
 
