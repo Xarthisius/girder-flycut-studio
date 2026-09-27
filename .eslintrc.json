@@ -20,9 +20,22 @@
     ".venv/",
     "build/",
     "dist/",
-    "girder_flycut/web_client/main.js"
+    "girder_flycut/web_client/generated/"
   ],
   "overrides": [
+    {
+      "files": [
+        "girder_flycut/web_client/**/*.js",
+        "girder_flycut/web_client/**/*.mjs",
+        "*.mjs"
+      ],
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "env": {
+        "node": true
+      }
+    },
     {
       "files": [
         "tests/**/*.cjs"

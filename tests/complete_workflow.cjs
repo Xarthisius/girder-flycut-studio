@@ -3,8 +3,10 @@
    extracts the same functions into importable modules and this disappears. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const source = fs.readFileSync(require('node:path').join(__dirname, '../girder_flycut/client_wrapper.js'), 'utf8');
-const body = source.split("act('#submitConfigBtn', async () => {")[1].split('\n            });')[0];
+// NOTE: these boundaries include indentation, so de-indenting main.js moves
+// them. That is issue D1; Phase 3 replaces the slicing with real imports.
+const source = fs.readFileSync(require('node:path').join(__dirname, '../girder_flycut/web_client/main.js'), 'utf8');
+const body = source.split("act('#submitConfigBtn', async () => {")[1].split('\n        });')[0];
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 async function run(automated, failure, valid = true) {
     const calls = [], nodes = {};
@@ -55,7 +57,7 @@ const records = [
 ];
 assert.deepEqual(select(records, true).map(r => r._id), ['draft']);
 assert.deepEqual(select(records, false), records);
-const configureBody = source.split('const configure = async automated => {')[1].split('\n            };')[0];
+const configureBody = source.split('const configure = async automated => {')[1].split('\n        };')[0];
 async function enter(activeConfig) {
     const nodes = {};
     const $ = key => nodes[key] ||= {classList:{toggle(){}}};
