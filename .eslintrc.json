@@ -59,6 +59,18 @@
         "browser": false,
         "node": true
       }
+    },
+    {
+      "files": [
+        "test/browser/**/*.cjs"
+      ],
+      "env": {
+        "browser": true,
+        "node": true
+      },
+      "parserOptions": {
+        "sourceType": "script"
+      }
     }
   ],
   "rules": {

@@ -87,12 +87,32 @@ Version 1.0.0 is the source/plugin release, not a packaged Girder deployment.
 Public publishing of IGSNs depends on separately configured JSONForms services.
 No migration of historical output files is performed automatically.
 
+## Browser verification
+
+```sh
+cd test/browser && npm ci && npx playwright install chromium && cd ../..
+GIRDER_URL=... GIRDER_ADMIN=... GIRDER_PASSWORD=... python3 test/browser/seed.py
+GIRDER_URL=... GIRDER_ADMIN=... GIRDER_PASSWORD=... node test/browser/verify.cjs
+```
+
+`seed.py` is pure REST, so the same script serves CI and a live deployment. Everything
+it creates is named "Flyer Studio E2E" or sits under it, and it is idempotent.
+
+`verify.cjs` walks the dashboard the way a person does — gallery, workflow home,
+configuration picker, builder form, generation and registration — and fails on any
+console error, page error or failed request. It asserts on user-visible state rather
+than structure, so Phase 4c can move code without the test being rewritten. It is the
+only thing in the repo that renders the UI; the `.cjs` suites drive DOM stubs.
+
+Screenshots land in `test/browser/screenshots/` and are uploaded as a CI artefact.
+
 ## Continuous integration
 
-`.github/workflows/build-test.yaml` runs two jobs. **check** is the fast gate: `ruff`,
+`.github/workflows/build-test.yaml` runs three jobs. **check** is the fast gate: `ruff`,
 a bundle rebuild, a staleness diff against the committed bundle, `node --check`, and the
 three frontend suites. **pytest** provisions MongoDB and Redis, installs girder-jsonforms
 from its `igsn` branch with its frontend built, and runs the server suite with coverage.
+**browser** does the same setup, starts Girder, seeds it and runs the harness above.
 
 There is deliberately no message broker in CI. Girder deployments always have one — core
 needs it to delete a folder — but the test environment does not, so the `enabled` fixture
