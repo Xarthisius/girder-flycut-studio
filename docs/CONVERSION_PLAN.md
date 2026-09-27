@@ -10,6 +10,35 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 | **Against** | `girder/WEB_CLIENT_CONVENTIONS.md`, `girder/CLAUDE.md`, `girder-dashboards/docs/extending.md` |
 | **Issues** | 33 — 8 critical, 14 major, 11 minor |
 | **Phases** | 7 |
+| **Status** | Phases 0–3 and 4a/4b merged; D2 done; 4c in flight. **19 of 33 closed, 2 partial.** |
+
+> The register below is the original audit and its severities are as-found. Entries carry
+> their own revision notes where execution changed the picture. `CLAUDE.md` has the short
+> version: what is merged, what is in flight, and where to pick up.
+
+---
+
+## Progress
+
+**Closed (19).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C5 C7 · D2 D3 · E1 E2 E3 · F2 F4.
+
+**Partly done (2).** C4 — the instantiability half closed in Phase 3. D1 — five of the
+eight source slices gone.
+
+**Untouched (12).**
+
+| Issue | What is left | Phase |
+|---|---|---|
+| **C1** | One view for six screens | 4c — *in flight* |
+| **C2 / C3** | Markup and styles are not yet Pug and Stylus | 4c, with the view split |
+| **C4** | The other half: state is closures, not models | 4c, with the views |
+| **D1** | Three slices left: `renderHome`, `configure`, the submit flow | 4c |
+| **B4 E4 E5 E6** | Line length, a config model, local imports, the `rest.py` split | 5 |
+| **C6 E7 G1** | The config page and the four endpoints behind it | 6 |
+| **F1 F3** | The vendored dependency; package metadata | 6 |
+
+Every Critical is closed. C4 was the last one open at 4b, and its headline — "cannot be
+instantiated twice" — turned out to have been fixed back in Phase 3.
 
 ---
 
@@ -22,7 +51,10 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 | Automation | **None** | No CI, no lint config of any kind |
 | Ruff (dashboards ruleset) | **34** | 26 import-order, 4 unused imports, 3 unused locals, 1 multi-import |
 
-The UI is a standalone static app in `config_builder/static/` that predates the Girder integration.
+*As audited, before any of the work below. Kept because it is what the plan was written
+against; `CLAUDE.md` describes the code as it stands now.*
+
+The UI was a standalone static app in `config_builder/static/` that predated the Girder integration.
 `build_dashboard.py` welds it into a plugin by slicing `index.html` on `<body>`, applying fifteen
 exact-string replacements, regex-rewriting the CSS, and substituting all three into
 `client_wrapper.js` at the markers `/* TEMPLATE */`, `/* STYLES */` and `/* BUILDER */`. The 909-line
@@ -75,11 +107,11 @@ effort. Each issue names the phase that closes it.
 | A4 | Major | ~~2~~ ✓ | A 909-line generated file is committed |
 | A5 | Major | ~~1~~ ✓ | No `package.json` for the client |
 | A6 | Minor | ~~4~~ ✓ | CSS is rewritten by regex at build time |
-| B1 | Critical | 0 | There is no CI |
+| B1 | Critical | ~~0~~ ✓ | There is no CI |
 | B2 | Critical | ~~0~~ ✓ | No lint configuration of any kind |
-| B3 | Major | 0 | 34 ruff findings, 8 of them genuine dead code |
+| B3 | Major | ~~0~~ ✓ | 34 ruff findings, 8 of them genuine dead code |
 | B4 | Minor | 5 | 253 lines exceed 100 characters |
-| B5 | Major | ~~6~~ 0 | The Python test suite has no reproducible environment |
+| B5 | Major | ~~6~~ 0 ✓ | The Python test suite has no reproducible environment |
 | C1 | Major | 4 | One Backbone view for six screens |
 | C2 | Major | 4 | Markup is a JSON-encoded string constant |
 | C3 | Major | 4 | Styles are a JSON-encoded string constant |
@@ -89,16 +121,16 @@ effort. Each issue names the phase that closes it.
 | C7 | Minor | ~~3~~ ✓ | Dead and cross-file-coupled functions in `app.js` |
 | D1 | Major | ~~3~~ 3 left | JavaScript tests extract functions by string-slicing the source |
 | D2 | Major | ~~6~~ ✓ | No end-to-end browser test |
-| D3 | Minor | 0 | No coverage measurement |
-| E1 | Critical | 0 | A test-only endpoint is exposed in the production API |
-| E2 | Critical | 0 | The stack mutex has no expiry, so a crash wedges a stack forever |
-| E3 | Critical | 0 | A startup migration can take the server down |
+| D3 | Minor | ~~0~~ ✓ | No coverage measurement |
+| E1 | Critical | ~~0~~ ✓ | A test-only endpoint is exposed in the production API |
+| E2 | Critical | ~~0~~ ✓ | The stack mutex has no expiry, so a crash wedges a stack forever |
+| E3 | Critical | ~~0~~ ✓ | A startup migration can take the server down |
 | E4 | Major | 5 | Configurations are Items with a metadata blob and no model |
 | E5 | Minor | 5 | Function-local imports throughout, including redundant ones |
 | E6 | Major | 5 | One 604-line Resource with 18 routes and a hand-rolled gate |
 | E7 | Minor | 6 | Four admin endpoints no shipped UI can reach |
 | F1 | Major | 6 | A stale committed copy of a PyPI dependency |
-| F2 | Major | ~~6~~ 0 | A required dependency is not installable from any index |
+| F2 | Major | ~~6~~ 0 ✓ | A required dependency is not installable from any index |
 | F3 | Minor | 6 | Thin package metadata and no `LICENSE` |
 | F4 | Minor | ~~2~~ ✓ | No single source of version truth |
 | G1 | Minor | 6 | A complete admin screen is built, wired, and permanently hidden |
