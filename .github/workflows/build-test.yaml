@@ -62,10 +62,9 @@ jobs:
           node tests/complete_workflow.cjs
 
   # Slow lane: the Python suite needs MongoDB and girder-jsonforms from its
-  # `igsn` branch, plus two AIMDL-hook guards that are not upstream yet. The
-  # steps below mirror docs/INSTALLATION.md exactly, so if they break here they
-  # are broken for anyone following it. Upstreaming the guards -- issue F2 in
-  # docs/CONVERSION_PLAN.md -- reduces this to a plain `pip install .`.
+  # `igsn` branch, which setup.py declares as a direct git reference, so pip
+  # fetches it unaided. No patch is involved any more -- see
+  # docs/JSONFORMS_COMPATIBILITY.md.
   pytest:
     name: Server tests
     runs-on: ubuntu-24.04
@@ -86,24 +85,10 @@ jobs:
         with:
           node-version: 22
 
-      # Installed from a patched checkout rather than letting pip resolve the
-      # `git+...@igsn` reference in setup.py, because the guards in
-      # patches/ are not upstream yet. `git apply` fails loudly if a hunk has
-      # since landed upstream, which is the signal to drop it from the patch.
-      - name: Install girder-jsonforms from the igsn branch
-        run: |
-          git clone -b igsn https://github.com/Xarthisius/girder-jsonforms.git ../girder-jsonforms
-          git -C ../girder-jsonforms apply "$GITHUB_WORKSPACE/patches/girder-jsonforms-flycut.patch"
-          python -m pip install --upgrade pip
-          python -m pip install -e ../girder-jsonforms
-
-      # --no-deps matters: a plain `pip install .` would re-resolve the
-      # `girder-jsonforms @ git+...@igsn` reference from setup.py and replace
-      # the patched editable install above with an unpatched one.
       - name: Install the plugin and its dependencies
         run: |
-          python -m pip install ./vendor/girder-dashboards
-          python -m pip install --no-deps .
+          python -m pip install --upgrade pip
+          python -m pip install ./vendor/girder-dashboards .
           python -m pip install -r requirements-dev.txt
 
       # girder-dashboards' load() md5-hashes every file it registers as static

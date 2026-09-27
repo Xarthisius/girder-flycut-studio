@@ -1,16 +1,49 @@
-# JSONForms compatibility patch
+# JSONForms compatibility
 
-Flyer Studio 1.0 is tested with Xarthisius/girder-jsonforms commit
-`52f29b751c14902b20ee3ca6f1870186ca0d37d1` plus [the compatibility patch](../patches/girder-jsonforms-flycut.patch).
-The patch adds optional child titles and relationship types to `create_batch`,
-skips unconfigured AIMD background registration, and limits AIMDL propagation to
-its own collection. Other callers retain the original batch defaults.
+Flyer Studio depends on Xarthisius/girder-jsonforms from its **`igsn` branch**, declared
+directly in `setup.py`:
 
-Apply the patch to a clean checkout of that commit before installing JSONForms.
-The [root README](../README.md) includes the commands. This dependency remains separate because
-it provides the IGSN service and has its own deployment requirements and frontend.
-The patch's upstream context is covered by [JSONFORMS_LICENSE](../patches/JSONFORMS_LICENSE).
+```
+girder-jsonforms @ git+https://github.com/Xarthisius/girder-jsonforms.git@igsn
+```
 
-The source repository includes the dashboards dependency under
-`vendor/girder-dashboards`, with its original license. Install it before Flyer Studio.
-No database, assetstore, credentials, or local preview launcher is bundled.
+The branch is required rather than preferred. Stack registration creates each stack as a
+child deposition via `create_batch()`'s `relation_type`, `inverse_relation_type` and
+`child_titles` arguments, which have never been released to PyPI.
+
+No patch is needed. There used to be one; every hunk is now either upstream or
+unnecessary:
+
+| Hunk | Status |
+|---|---|
+| `create_batch()` relationships and child titles | Upstreamed as [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34), merged into `igsn` on 2026-09-25 as `51500a3`, in a better form: keyword-only, validated, and tested. |
+| Skip the AIMD portal task when `AIMD_PORTAL_TOKEN` is unset | Unnecessary. It existed to avoid `.delay()` without a broker, but every Girder deployment has one — core itself enqueues `deleteFolderTask.delay()` on `DELETE /folder/:id`. The task already returns early when the token is absent, so the worst case is one queued no-op and a log line per registration. |
+| Skip AIMDL project propagation for non-AIMDL items | Replaced by configuration. See below. |
+
+## Configure `jsonforms.projects_enabled`
+
+**A standalone Flyer Studio deployment must set `jsonforms.projects_enabled` to `false`.**
+
+`PROJECTS_ENABLED` defaults to `true`. With it on, every item save carrying `meta.igsn`
+reaches `propagate_to_projects()`, which calls `AIMDL._get_base_parent()` — and that
+raises `RestException("AIMDL collection not found. Please ensure the collection exists.",
+404)` when there is no AIMDL collection, which is exactly the case here. Turning the
+setting off returns at the first line of that function instead, before the lookup.
+
+Set it from the admin console under **Plugins → JSONForms**, or:
+
+```sh
+girder shell -c "from girder.models.setting import Setting; \
+  Setting().set('jsonforms.projects_enabled', False)"
+```
+
+A combined AIMDL and Flyer Studio deployment should leave it `true`: the AIMDL collection
+exists, the lookup resolves, and the `baseParentId` comparison already skips items that
+live outside it.
+
+## Related dependencies
+
+This dependency stays separate because it provides the IGSN service and carries its own
+deployment requirements and frontend. `vendor/girder-dashboards` ships the dashboards
+dependency with its original licence; install it before Flyer Studio. No database,
+assetstore, credentials, or local preview launcher is bundled.

@@ -4,4 +4,4 @@ recursive-include girder_flycut *.py *.json *.js *.css *.html *.lbrn2
 recursive-include tests *.py *.cjs
 
 recursive-include docs *.md
-recursive-include patches *.patch JSONFORMS_LICENSE
+recursive-include patches JSONFORMS_LICENSE

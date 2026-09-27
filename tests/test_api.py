@@ -29,6 +29,13 @@ def enabled(server, db, user, request, monkeypatch, fsAssetstore):
     doc['settings'] = {'workspace_folder_id': str(folder['_id']), 'owners_include_user': True}
     doc['enabled'] = True
     Dashboard().save(doc)
+    # Mirrors what a standalone Flyer Studio deployment must configure. Left on,
+    # every item save carrying meta.igsn reaches propagate_to_projects(), which
+    # raises a 404 resolving an AIMDL collection that does not exist here.
+    # See docs/JSONFORMS_COMPATIBILITY.md.
+    from girder.models.setting import Setting
+    from girder_jsonforms.settings import PluginSettings as JsonformsSettings
+    Setting().set(JsonformsSettings.PROJECTS_ENABLED, False)
     return doc
 
 

@@ -79,7 +79,7 @@ effort. Each issue names the phase that closes it.
 | B2 | Critical | 0 | No lint configuration of any kind |
 | B3 | Major | 0 | 34 ruff findings, 8 of them genuine dead code |
 | B4 | Minor | 5 | 253 lines exceed 100 characters |
-| B5 | Major | 6 | The Python test suite has no reproducible environment |
+| B5 | Major | ~~6~~ 0 | The Python test suite has no reproducible environment |
 | C1 | Major | 4 | One Backbone view for six screens |
 | C2 | Major | 4 | Markup is a JSON-encoded string constant |
 | C3 | Major | 4 | Styles are a JSON-encoded string constant |
@@ -98,7 +98,7 @@ effort. Each issue names the phase that closes it.
 | E6 | Major | 5 | One 604-line Resource with 18 routes and a hand-rolled gate |
 | E7 | Minor | 6 | Four admin endpoints no shipped UI can reach |
 | F1 | Major | 6 | A stale committed copy of a PyPI dependency |
-| F2 | Major | 6 | A required dependency is not installable from any index |
+| F2 | Major | ~~6~~ 0 | A required dependency is not installable from any index |
 | F3 | Minor | 6 | Thin package metadata and no `LICENSE` |
 | F4 | Minor | 2 | No single source of version truth |
 | G1 | Minor | 6 | A complete admin screen is built, wired, and permanently hidden |
@@ -209,13 +209,14 @@ unreadable in review and `git blame` stops being informative.
 **Fix** — A limit chosen in Decision 5, applied module by module during the Phase 5 split.
 
 #### B5 — The Python test suite has no reproducible environment
-**Major · Phase 6**
+**Major · ~~Phase 6~~ → resolved in Phase 0**
 
-Running the 37 tests requires cloning girder-jsonforms at commit `52f29b7` and applying
-`patches/girder-jsonforms-flycut.patch` by hand. These tests were not run during this audit and no
-claim is made about them. Neither can CI, until F2 is resolved.
+Running the 37 tests used to require cloning girder-jsonforms at commit `52f29b7` and applying a
+patch by hand. These tests were not run during the audit and no claim was made about them.
 
-**Fix** — Follows directly from F2; then a `tox.ini` that provisions the environment in one command.
+**Outcome** — F2's resolution removed the blocker: `pip install .` resolves the dependency, and the
+CI `pytest` job now provisions MongoDB and runs the suite with coverage. A `tox.ini` wrapping that
+into one local command remains worthwhile.
 
 ---
 
@@ -415,28 +416,26 @@ configuration.
 rather than vendoring a tree.
 
 #### F2 — A required dependency is not installable from any index
-**Major · Phase 6**
+**Major · ~~Phase 6~~ → resolved in Phase 0**
 
-*Revised in Phase 0.* The dependency is girder-jsonforms' **`igsn` branch** — not a PyPI release,
-and not the pinned commit `52f29b7` that `INSTALLATION.md` used to name. `setup.py` now declares it
+*Revised twice while executing Phase 0; both revisions came from maintainer correction.*
+
+The dependency is girder-jsonforms' **`igsn` branch** — not a PyPI release, and not the
+pinned commit `52f29b7` that `INSTALLATION.md` used to name. `setup.py` now declares it
 directly: `girder-jsonforms @ git+https://github.com/Xarthisius/girder-jsonforms.git@igsn`.
 
-The accompanying patch has shrunk. Its functional half — `create_batch()`'s `relation_type`,
-`inverse_relation_type` and `child_titles` arguments, which stack registration depends on — was
-upstreamed as [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34) and merged into
-`igsn` on 2026-09-25 as `51500a3`, in a better form: keyword-only, validated, and tested. Two
-AIMDL-hook guards remain, and both still apply cleanly to the `igsn` tip:
+`patches/girder-jsonforms-flycut.patch` is **deleted**. Every hunk was either upstream or
+unnecessary:
 
-- `handle_deposition_registration()` enqueues `register_deposition_with_aimd.delay()`, which needs a
-  broker even though the task returns early when `AIMD_PORTAL_TOKEN` is unset.
-- `propagate_to_projects()` assumes every item lives in the AIMDL collection.
+| Hunk | Outcome |
+|---|---|
+| `create_batch()` relationships and child titles | Upstreamed as [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34), merged into `igsn` on 2026-09-25 as `51500a3` — keyword-only, validated, tested. |
+| Skip the AIMD task when `AIMD_PORTAL_TOKEN` is unset | Unnecessary. It existed to avoid `.delay()` without a broker, but every Girder deployment has one: core enqueues `deleteFolderTask.delay()` on `DELETE /folder/:id` (`girder/api/v1/folder.py:311,395`). The task already returns early without a token. |
+| Skip AIMDL propagation for non-AIMDL items | Replaced by configuration. `PROJECTS_ENABLED` defaults to `true`, and with it on `propagate_to_projects()` calls `AIMDL._get_base_parent()`, which raises `RestException(404)` when no AIMDL collection exists. Setting `jsonforms.projects_enabled` to `false` returns at that function's first line instead. |
 
-Flyer Studio needs both in **every** deployment, not just unusual ones: it runs inside Girder as the
-signed-in user, holds no AIMD portal token, and never contacts the AIMD portal.
-
-**Fix** — Upstream both guards the way `create_batch` went up. That deletes
-`patches/girder-jsonforms-flycut.patch`, makes the `setup.py` reference sufficient on its own, and
-reduces CI's install step to `pip install .`.
+**Outcome** — `pip install .` now resolves the dependency unaided, CI installs it without a
+clone-and-patch step, and B5's "no reproducible environment" follows. One documented
+setting replaces 83 lines of patch.
 
 #### F3 — Thin package metadata and no `LICENSE`
 **Minor · Phase 6**
