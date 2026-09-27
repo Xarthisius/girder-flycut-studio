@@ -663,61 +663,57 @@ and a browser pass. No file in the repository is a copy of something that lives 
 
 ---
 
-## Decisions needed before Phase 4
+## Decisions — all answered
 
-These are the maintainers' calls — each changes what the work actually is. Recommendations are given,
-but the first three in particular could reasonably go either way.
+Answered by the maintainer on 2026-09-27, after Phase 2. Each is recorded with what it
+changes, because several rewrite the phases that follow.
 
-### 1. Keep the shadow root, or drop it?
+### 1. Drop the shadow root — Phase 4
 
-Keeping it preserves genuine style isolation and means the existing CSS needs no prefixing — but it
-forces styles to be injected as a string, excludes Bootstrap 3 and Girder's own widgets from the
-subtree, and already requires an exception: `BrowserWidget` has to be mounted outside it, in
-`#g-dialog-container`.
+Move to conventional `g-flycut-` prefixed Stylus. Girder's widgets and Bootstrap 3 compose
+naturally, Pug and Stylus work as the conventions intend, and the stylesheet ships as a
+real `style.css` rather than an inlined string.
 
-**Recommend** — Drop it in Phase 4. Pug plus Stylus plus a `g-flycut-` prefix is the convention, it
-lets Girder's widgets compose naturally, and the one place shadow DOM was load-bearing has already
-been worked around.
+**Changes:** `registerPluginStaticContent` gains `css=['/style.css']`; every selector gains
+a prefix in the same pass; `BrowserWidget`'s mount-outside-the-shadow-root workaround stops
+being an exception and becomes the normal case.
 
-### 2. What happens to the jsonforms patch?
+### 2. JSONForms dependency — resolved in Phase 0
 
-Upstreaming is cleanest but depends on a maintainer you do not control. A published fork is fully in
-your hands but is a package to maintain. Pinning a pre-built wheel to a private index is the middle
-path.
+The `igsn` branch by direct git reference; the patch is deleted. See F2.
 
-**Recommend** — Attempt upstreaming first, with a forked package as the fallback. This blocks Phase 6
-entirely, so it is worth starting during Phase 0 even though it lands last.
+### 3. `config_builder/static/` does **not** stay standalone — Phase 4 deletes it
 
-### 3. Does `config_builder/static/` survive as a standalone app?
+The plugin takes ownership of its markup.
 
-If the static builder must keep running outside Girder, the Phase 3 core has to serve both consumers
-and Phase 4 cannot simply absorb `app.js`. If it does not, the directory is deletable once Phase 4
-lands and the roadmap gets materially shorter.
+**Changes, and they are the largest in this plan:**
 
-**Recommend** — Confirm this early. It is the single answer that most changes the shape of Phases 3
-and 4.
+- **A2 and A6 get deleted rather than guarded.** The literal needles exist because the
+  markup is derived from `index.html`. Once the plugin owns it, `generate-sources.mjs`
+  loses its substitutions entirely and most of the file goes with them.
+- **The eslint formatting pass unblocks** the moment the markup moves, since nothing
+  matches `app.js`'s text any more. `.eslintrc.md`'s deferral ends there.
+- **Phase 3's core extraction serves one consumer,** so the extracted modules can live
+  inside `girder_flycut/web_client/` instead of somewhere both halves can reach.
+- **Phase 4 absorbs `app.js`** instead of wrapping it.
 
-### 4. Where do admin settings live?
+### 4. Build the config page — Phase 6
 
-Today an admin hand-writes ObjectIds into the dashboards settings JSON textarea. The alternative is
-already built and hidden: a proper config page at `#plugins/flycut/config` with a workspace browser
-and principal search.
+Promote the hidden admin screen to `#plugins/flycut/config` via `exposePluginConfig`. The
+markup, workspace browser, principal search and save handler already exist; the four
+`@access.admin` endpoints they call stay. Closes C6, E7 and G1 together, and removes a
+misconfiguration class that `DASHBOARD_CONFIGURATION.md` currently documents as
+troubleshooting — admins hand-write ObjectIds into a JSON textarea today.
 
-**Recommend** — Promote the hidden screen to a config page in Phase 6. The code exists, the endpoints
-exist, and it removes a class of misconfiguration that `DASHBOARD_CONFIGURATION.md` currently has to
-document as a troubleshooting section.
+### 5. `ruff format` plus import sorting at 120 columns — Phase 5
 
-### 5. Adopt girder-dashboards' exact Python style, or keep the house style?
+Adopt `ruff format` repo-wide (18 files change, including all of `girder_flycut/`) and
+enable `I`. Keep the 120-column limit already in `ruff.toml` rather than
+girder-dashboards' 88: it respects the existing dense style while ending the
+581-character line and making diffs reviewable.
 
-Matching means import sorting and an 88-column limit — that is 26 `I001` fixes and 253 long lines.
-Keeping the dense style means choosing a looser limit and disabling `I001`, which is legitimate but
-should be a written decision rather than an absence of configuration.
-
-**Recommend** — Adopt `I001` now (it is entirely automatic via `ruff --fix`) and set the line limit to
-120 rather than 88 — a real constraint that respects the existing style without leaving 581-character
-lines in review.
-
----
+**Changes:** B4 becomes a formatter run plus a CI step rather than a manual rewrap, and
+E5's import hoisting is what `I` then enforces.
 
 ## Measurements
 
