@@ -279,7 +279,13 @@ async function reopen(page, base, id) {
             }
 
             await page.click('#submitConfigBtn');
-            await page.waitForSelector('#workflowHome:not(.hidden)', { timeout: 30000 });
+            // Surface why, rather than just timing out: a failed submit leaves
+            // its reason in #runStatus or the toast.
+            await page.waitForSelector('#workflowHome:not(.hidden)', { timeout: 30000 })
+                .catch(async (err) => {
+                    const why = await textOf(page, '#runStatus') || await textOf(page, '#toast');
+                    throw new Error(`submit did not return to the workflow: ${why || err.message}`);
+                });
             check('submitting returns to the workflow and reports it',
                 (await textOf(page, '#runStatus')).includes('submitted'),
                 await textOf(page, '#runStatus'));

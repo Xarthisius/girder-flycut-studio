@@ -82,6 +82,20 @@ def setting(key, value):
     return True
 
 
+def ensure_assetstore():
+    """A filesystem assetstore, without which submitting cannot write its files.
+
+    A fresh `girder serve` has none; a real deployment always does, which is why
+    the lifecycle walk passed against deploy-dev and stalled at submit in CI.
+    """
+    existing = call("GET", "assetstore", {"limit": 10}) or []
+    if existing:
+        return existing[0]
+    root = os.environ.get("GIRDER_ASSETSTORE_ROOT", "/tmp/girder_flycut_e2e_assetstore")
+    return call("POST", "assetstore", body={
+        "type": 0, "name": "Flyer Studio E2E", "root": root})
+
+
 def find_or_create_collection(name):
     for entry in call("GET", "collection", {"text": name, "limit": 50}) or []:
         if entry["name"] == name:
@@ -136,6 +150,9 @@ def main():
     # the AIMD portal. See docs/JSONFORMS_COMPATIBILITY.md.
     if setting("jsonforms.projects_enabled", False):
         print("  set jsonforms.projects_enabled = False")
+
+    store = ensure_assetstore()
+    print(f"  assetstore {store['_id']} ({store.get('name')})")
 
     collection = find_or_create_collection(COLLECTION)
     workspace = find_or_create_folder(collection["_id"], WORKSPACE)
