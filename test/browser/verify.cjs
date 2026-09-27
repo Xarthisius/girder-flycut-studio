@@ -71,6 +71,27 @@ async function visible(page, selector) {
     return page.locator(selector).isVisible().catch(() => false);
 }
 
+/**
+ * Fill the required fields and return the stack ID that AUTO picked.
+ *
+ * Leaving the builder calls blank(), so anything typed before is gone on
+ * re-entry -- the guard check leaves and comes back, and the lifecycle needs a
+ * complete form after it.
+ */
+async function fillRequiredFields(page, pickMaterial) {
+    await page.click('#autoStackIdBtn');
+    await page.waitForFunction(
+        () => document.querySelector('#stackid').value.length > 0, { timeout: 15000 });
+    if (pickMaterial) {
+        await page.selectOption('#foilMaterial', { index: 1 });
+        await page.selectOption('#template', { index: 1 });
+        await page.waitForFunction(
+            () => document.querySelectorAll('.g-flycut-dashboard #canvas .flyer').length > 0,
+            { timeout: 20000 });
+    }
+    return page.inputValue('#stackid');
+}
+
 async function textOf(page, selector) {
     return (await page.locator(selector).first().textContent().catch(() => '') || '').trim();
 }
@@ -251,18 +272,11 @@ async function reopen(page, base, id) {
         await page.screenshot({ path: `${SHOTS}/03-builder.png` });
 
         // ---- filling it in ----------------------------------------------
-        await page.click('#autoStackIdBtn');
-        await page.waitForFunction(
-            () => document.querySelector('#stackid').value.length > 0, { timeout: 15000 });
-        const stackId = await page.inputValue('#stackid');
+        const usable = materialCount > 1 && templateCount > 1;
+        let stackId = await fillRequiredFields(page, usable);
         check('AUTO assigns a stack ID', /^[0-9A-HJKMNP-TV-Z]{5}$/.test(stackId), stackId);
 
-        if (materialCount > 1 && templateCount > 1) {
-            await page.selectOption('#foilMaterial', { index: 1 });
-            await page.selectOption('#template', { index: 1 });
-            await page.waitForFunction(
-                () => document.querySelectorAll('.g-flycut-dashboard #canvas .flyer').length > 0,
-                { timeout: 20000 });
+        if (usable) {
             const flyers = await page.locator('#canvas .flyer').count();
             check('choosing a template renders its flyer layout', flyers > 0, `${flyers} flyers`);
             const summary = await textOf(page, '#statusSummary');
@@ -297,15 +311,17 @@ async function reopen(page, base, id) {
             await visible(page, '#configurationPicker'),
             `prompted=${nativeDialogs > dialogsBefore}`);
 
-        // Back in, clean, for the lifecycle.
+        // Back in for the lifecycle. Leaving reset the form, so fill it again --
+        // and take the new stack ID, since AUTO will have moved on.
         await page.click('#buildConfigBtn');
         await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 15000 });
         await page.fill('#operator', ADMIN);
+        stackId = await fillRequiredFields(page, usable);
 
         // ---- the full lifecycle: submit, generate, register --------------
         // These are the buttons Phase 4c moves out of the shell's closure, and
         // the only way to know they still work is to press them.
-        if (materialCount > 1 && templateCount > 1) {
+        if (usable) {
             const runName = `e2e-${stackId}`;
             await page.fill('#saveAsName', runName);
 
