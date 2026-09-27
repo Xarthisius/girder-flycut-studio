@@ -9,7 +9,12 @@
  * import, which is what let the pure logic move to ./core/.
  */
 import { assessConfiguration } from './core/assess.js';
-import { makeLaser as buildLaser, restoreImportedLaser } from './core/laser.js';
+import {
+    makeLaser as buildLaser, restoreImportedLaser, LASER_LIMIT,
+    normalizeLayerNames as renameByPosition, moveLaser as reorderLasers,
+    applyMaterialDefaults as applyDefaults, usedLaserCount as countUsed,
+    resolveLaserForLayer as resolveLayer
+} from './core/laser.js';
 import { exportDecision } from './core/validate.js';
 
 export default async function createBuilder({ mount, currentUser, fetch }) {
@@ -21,32 +26,13 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     const state = { materials: [], templates: [], templateDetail: null, laserParams: [], customFields: [], knownOperators: [], knownFieldNames: [], parameterImportFile: null, zoom: 1, submittedStackIds: [], presets: [], preset: null };
     let draggedLaserId = null;
 
-    function normalizeLayerNames() {
-        state.laserParams.forEach((laser, index) => { laser.name = `F${index + 1}`; });
-    }
+    const normalizeLayerNames = () => renameByPosition(state.laserParams);
 
-    function applyMaterialDefaults(material) {
-        const preset = state.presets.find((entry) => entry.id === state.preset);
-        if (preset) { state.laserParams.filter((laser) => laser.isDefault).forEach((laser) => Object.assign(laser, preset.laser_defaults)); return; }
-        if (!material?.laser_defaults) return;
-        const defaults = material.laser_defaults;
-        state.laserParams.filter((laser) => laser.isDefault).forEach((laser) => {
-            laser.power = defaults.maxPower ?? laser.power;
-            laser.speed = defaults.speed ?? laser.speed;
-            laser.qpulsewidth = defaults.QPulseWidth ?? laser.qpulsewidth;
-            laser.frequency = defaults.frequency ?? laser.frequency;
-            laser.passes = defaults.numPasses ?? laser.passes;
-        });
-    }
+    const applyMaterialDefaults = (material) => applyDefaults(
+        state.laserParams, material, state.presets.find((entry) => entry.id === state.preset));
 
     function moveLaser(sourceId, targetId, placeAfter = false) {
-        if (!sourceId || !targetId || sourceId === targetId) return;
-        const sourceIndex = state.laserParams.findIndex((laser) => laser.id === sourceId);
-        if (sourceIndex < 0) return;
-        const [moved] = state.laserParams.splice(sourceIndex, 1);
-        const targetIndex = state.laserParams.findIndex((laser) => laser.id === targetId);
-        state.laserParams.splice(targetIndex + (placeAfter ? 1 : 0), 0, moved);
-        normalizeLayerNames();
+        reorderLasers(state.laserParams, sourceId, targetId, placeAfter);
         renderLasers();
         updateAll();
     }
@@ -80,11 +66,8 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
 
     function escapeHtml(value = '') { const div = document.createElement('div'); div.textContent = value; return div.innerHTML; }
 
-    function usedLaserCount(layerCount) {
-        const repeat = Math.max(1, Number($('#repeatX').value) || 1);
-        if (layerCount === null) return null;
-        return Math.min(state.laserParams.length, Math.ceil(layerCount / repeat));
-    }
+    const usedLaserCount = (layerCount) =>
+        countUsed(state.laserParams, layerCount, Number($('#repeatX').value));
 
     function renderAutocomplete() {
         $('#operatorNames').innerHTML = state.knownOperators.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
@@ -121,7 +104,7 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
         </article>`;
         }).join('');
         $('#laserCount').textContent = `${state.laserParams.length} / ${layerCount ?? '—'}`;
-        $('#addLaserBtn').disabled = state.laserParams.length >= 28;
+        $('#addLaserBtn').disabled = state.laserParams.length >= LASER_LIMIT;
         $('#addLaserBtn').classList.toggle('surplus', layerCount !== null && state.laserParams.length >= layerCount);
         $('#addLaserBtn').title = layerCount !== null && state.laserParams.length >= layerCount ? 'Additional settings will be unused by this template' : 'Add the next layer setting';
         $('#laserError').textContent = state.laserParams.length ? '' : 'At least one laser setting is required.';
@@ -253,16 +236,9 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
         updateAll();
     }
 
-    function resolveLaserForLayer(layerIndex) {
-        const total = state.laserParams.length;
-        if (!total) return { laser: null, augmented: false };
-        const repeat = Math.max(1, Number($('#repeatX').value) || 1);
-        let laserIndex = Math.floor(layerIndex / repeat);
-        if ($('#allowWraparound').checked) laserIndex %= total;
-        const setting = state.laserParams[laserIndex];
-        const laser = setting?.enabled !== false ? setting || null : null;
-        return { laser, augmented: Boolean(laser && laser.name !== `F${layerIndex + 1}`) };
-    }
+    const resolveLaserForLayer = (layerIndex) => resolveLayer(state.laserParams, layerIndex, {
+        repeat: Number($('#repeatX').value), wraparound: $('#allowWraparound').checked
+    });
 
     function updateAssignmentUI() {
         renderLasers(); updateAll();
@@ -349,7 +325,7 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     $('#template').addEventListener('change', changeTemplate);
     $('#allowWraparound').addEventListener('change', updateAssignmentUI);
     $('#repeatX').addEventListener('input', updateAssignmentUI);
-    $('#addLaserBtn').addEventListener('click', () => { if (state.laserParams.length >= 28) return; state.laserParams.push(makeLaser({ isDefault: true })); applyMaterialDefaults(state.materials.find((item) => item.id === $('#foilMaterial').value)); renderLasers(); updateAll(); });
+    $('#addLaserBtn').addEventListener('click', () => { if (state.laserParams.length >= LASER_LIMIT) return; state.laserParams.push(makeLaser({ isDefault: true })); applyMaterialDefaults(state.materials.find((item) => item.id === $('#foilMaterial').value)); renderLasers(); updateAll(); });
     $('#importExcelBtn').addEventListener('click', () => $('#excelFile').click());
     $('#excelFile').addEventListener('change', (event) => importExcel(event.target.files?.[0]));
 

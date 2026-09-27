@@ -71,6 +71,27 @@ async function visible(page, selector) {
     return page.locator(selector).isVisible().catch(() => false);
 }
 
+/**
+ * Fill the required fields and return the stack ID that AUTO picked.
+ *
+ * Leaving the builder calls blank(), so anything typed before is gone on
+ * re-entry -- the guard check leaves and comes back, and the lifecycle needs a
+ * complete form after it.
+ */
+async function fillRequiredFields(page, pickMaterial) {
+    await page.click('#autoStackIdBtn');
+    await page.waitForFunction(
+        () => document.querySelector('#stackid').value.length > 0, { timeout: 15000 });
+    if (pickMaterial) {
+        await page.selectOption('#foilMaterial', { index: 1 });
+        await page.selectOption('#template', { index: 1 });
+        await page.waitForFunction(
+            () => document.querySelectorAll('.g-flycut-dashboard #canvas .flyer').length > 0,
+            { timeout: 20000 });
+    }
+    return page.inputValue('#stackid');
+}
+
 async function textOf(page, selector) {
     return (await page.locator(selector).first().textContent().catch(() => '') || '').trim();
 }
@@ -125,6 +146,7 @@ async function reopen(page, base, id) {
     // The unsaved-changes guard uses a native confirm() today and a Girder modal
     // after C5. Accept either, so this check survives that change.
     let nativeDialogs = 0;
+    let acceptNextPrompt = false;
     page.on('dialog', async (dialog) => {
         // beforeunload has to be accepted or the navigation that triggered it is
         // cancelled -- dismissing one means "stay on this page". Only the
@@ -134,8 +156,35 @@ async function reopen(page, base, id) {
             return;
         }
         nativeDialogs++;
+        if (acceptNextPrompt) {
+            await dialog.accept();
+            return;
+        }
         await dialog.dismiss();
     });
+
+    /**
+     * Click something that may trip the unsaved-changes guard, and answer
+     * whichever kind of prompt it raises.
+     *
+     * Arming has to happen before the click: a native confirm() is dispatched
+     * synchronously from inside the click handler, so a flag set afterwards is
+     * already too late. A Girder modal is the opposite -- still on screen when
+     * the click returns, and answered with a button press.
+     */
+    async function clickThroughGuard(page, selector, accept) {
+        acceptNextPrompt = accept;
+        await page.click(selector);
+        await page.waitForTimeout(600);
+        const modal = page.locator('#g-dialog-container .modal-dialog');
+        const wasModal = await modal.isVisible().catch(() => false);
+        if (wasModal) {
+            await page.click(accept ? '#g-confirm-button' : '#g-dialog-container .btn-default');
+            await page.waitForTimeout(600);
+        }
+        acceptNextPrompt = false;
+        return wasModal;
+    }
 
     try {
         // ---- gallery ----------------------------------------------------
@@ -223,18 +272,23 @@ async function reopen(page, base, id) {
         await page.screenshot({ path: `${SHOTS}/03-builder.png` });
 
         // ---- filling it in ----------------------------------------------
-        await page.click('#autoStackIdBtn');
-        await page.waitForFunction(
-            () => document.querySelector('#stackid').value.length > 0, { timeout: 15000 });
-        const stackId = await page.inputValue('#stackid');
+        // A clean form must not prompt at all. This was asserted by slicing
+        // canLeave() out of main.js and eval'ing it; it is checked against the
+        // real page now, which is what let that slice go.
+        const cleanDialogs = nativeDialogs;
+        await page.click('#backWorkflowBtn');
+        await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 15000 });
+        check('a clean form leaves without prompting',
+            nativeDialogs === cleanDialogs &&
+            !(await visible(page, '#g-dialog-container .modal-dialog')));
+        await page.click('#buildConfigBtn');
+        await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 15000 });
+
+        const usable = materialCount > 1 && templateCount > 1;
+        let stackId = await fillRequiredFields(page, usable);
         check('AUTO assigns a stack ID', /^[0-9A-HJKMNP-TV-Z]{5}$/.test(stackId), stackId);
 
-        if (materialCount > 1 && templateCount > 1) {
-            await page.selectOption('#foilMaterial', { index: 1 });
-            await page.selectOption('#template', { index: 1 });
-            await page.waitForFunction(
-                () => document.querySelectorAll('.g-flycut-dashboard #canvas .flyer').length > 0,
-                { timeout: 20000 });
+        if (usable) {
             const flyers = await page.locator('#canvas .flyer').count();
             check('choosing a template renders its flyer layout', flyers > 0, `${flyers} flyers`);
             const summary = await textOf(page, '#statusSummary');
@@ -249,25 +303,37 @@ async function reopen(page, base, id) {
         // ---- the unsaved-changes guard ----------------------------------
         // The riskiest thing C5 touches: canLeave() is synchronous today and one
         // of its callers is a capture-phase click handler.
-        const dialogsBefore = nativeDialogs;
+        let dialogsBefore = nativeDialogs;
         await page.fill('#operator', 'someone-else');
-        await page.click('#backWorkflowBtn');
-        await page.waitForTimeout(600);
-        const modalShown = await visible(page, '#g-dialog-container .modal-dialog');
+        const wasModal = await clickThroughGuard(page, '#backWorkflowBtn', false);
         check('leaving with unsaved changes prompts',
-            nativeDialogs > dialogsBefore || modalShown,
-            nativeDialogs > dialogsBefore ? 'native confirm' : `modal=${modalShown}`);
+            nativeDialogs > dialogsBefore || wasModal,
+            wasModal ? 'girder modal' : 'native confirm');
         check('dismissing the prompt keeps you in the builder',
             await visible(page, '#builderScreen'));
 
-        // Put the field back so the builder is clean before the lifecycle
-        // starts; the guard above left it dirty on purpose.
+        // Accepting has to actually leave. Nothing asserted this before, and it
+        // is the half of the guard that C5 is most likely to break: the guard
+        // must stop preventing the navigation once you agree to it.
+        dialogsBefore = nativeDialogs;
+        await clickThroughGuard(page, '#backWorkflowBtn', true);
+        await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 15000 })
+            .catch(() => {});
+        check('accepting the prompt leaves the builder',
+            await visible(page, '#configurationPicker'),
+            `prompted=${nativeDialogs > dialogsBefore}`);
+
+        // Back in for the lifecycle. Leaving reset the form, so fill it again --
+        // and take the new stack ID, since AUTO will have moved on.
+        await page.click('#buildConfigBtn');
+        await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 15000 });
         await page.fill('#operator', ADMIN);
+        stackId = await fillRequiredFields(page, usable);
 
         // ---- the full lifecycle: submit, generate, register --------------
         // These are the buttons Phase 4c moves out of the shell's closure, and
         // the only way to know they still work is to press them.
-        if (materialCount > 1 && templateCount > 1) {
+        if (usable) {
             const runName = `e2e-${stackId}`;
             await page.fill('#saveAsName', runName);
 

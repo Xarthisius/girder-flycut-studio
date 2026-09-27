@@ -14,6 +14,7 @@ import { groupedOptions, selectableConfigs } from './core/records.js';
 import './styles/dashboard.css';
 import template from './templates/dashboard.html?raw';
 
+const $$ = girder.$;
 const View = girder.views.View;
 const request = async (url, method = 'GET', data) => {
     try {
@@ -79,8 +80,23 @@ const Dashboard = View.extend({
             name: $('#saveAsName').value
         });
         const dirty = () => !readOnly && !$('#builderScreen').classList.contains('hidden') && snapshot() !== baseline;
-        // eslint-disable-next-line no-alert -- synchronous gate; C5/Phase 4 makes canLeave() async
-        const canLeave = () => !dirty() || confirm('You have unsaved changes. Leave without saving? Choose Cancel to return and save.');
+        // girder.dialog.confirm only calls back on yes, so "no" is the modal
+        // closing without that having happened.
+        const ask = (text, yesText) => new Promise((resolve) => {
+            let confirmed = false;
+            girder.dialog.confirm({
+                text,
+                yesText,
+                yesClass: 'btn-danger',
+                confirmCallback: () => { confirmed = true; resolve(true); }
+            });
+            $$('#g-dialog-container').one('hidden.bs.modal', () => {
+                if (!confirmed) resolve(false);
+            });
+        });
+        const canLeave = async () => !dirty() || await ask(
+            'You have unsaved changes. Leave without saving? Choose Cancel to return and save.',
+            'Leave');
         const status = (message) => { $('#runStatus').textContent = message; };
         const showScreen = (id) => {
             for (const screen of ['workflowHome', 'configurationPicker', 'lightburnPicker', 'registrationPicker', 'builderScreen', 'adminSettingsScreen']) { $('#' + screen).classList.toggle('hidden', screen !== id); }
@@ -349,8 +365,8 @@ const Dashboard = View.extend({
             await refresh(); status('Files generated.');
         });
         act('#deleteFilesBtn', async () => {
-            // eslint-disable-next-line no-alert -- C5/Phase 4
-            if (!confirm('Delete this configuration’s generated files? It will return to submitted and its Stack ID can be reused.')) return;
+            if (!await ask('Delete this configuration’s generated files? It will return to ' +
+                'submitted and its Stack ID can be reused.', 'Delete')) return;
             await request('config/' + $('#submittedConfigs').value + '/files', 'DELETE');
             await refresh(); status('Generated files deleted. Configuration is submitted.');
         });
@@ -379,9 +395,10 @@ const Dashboard = View.extend({
             baseline = snapshot();
             showScreen('builderScreen');
         });
-        $('#studioHomeLink').addEventListener('click', (event) => {
+        $('#studioHomeLink').addEventListener('click', async (event) => {
             event.preventDefault();
-            if (!busy && canLeave()) home();
+            if (busy) return;
+            if (await canLeave()) home();
         });
         act('#resetBtn', async () => {
             if (readOnly) return;
@@ -394,7 +411,9 @@ const Dashboard = View.extend({
             await refresh();
             showScreen('configurationPicker');
         });
-        $('#backWorkflowBtn').addEventListener('click', () => { if (canLeave()) showScreen('configurationPicker'); });
+        $('#backWorkflowBtn').addEventListener('click', async () => {
+            if (await canLeave()) showScreen('configurationPicker');
+        });
         $('#editCopyBtn').addEventListener('click', () => {
             activeConfig = null;
             $('#savedConfigs').value = '';
@@ -458,11 +477,27 @@ const Dashboard = View.extend({
             status('Complete: configuration submitted, files generated, and stack IGSN registered.');
         });
         const beforeUnload = (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } };
+        // Asking is asynchronous now, so this can no longer decide inside the
+        // event. It stops every link while the form is dirty and re-issues the
+        // click once the answer comes back, with a flag so the re-issued one
+        // passes straight through.
+        let leaving = false;
         const guardNavigation = (event) => {
+            if (leaving) return;
             if (event.target.closest?.('#g-dialog-container')) return;
             const link = event.composedPath().find((node) => node.tagName === 'A');
-            if (link?.id === 'studioHomeLink') return;
-            if (link && !canLeave()) { event.preventDefault(); event.stopImmediatePropagation(); }
+            if (!link || link.id === 'studioHomeLink' || !dirty()) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            canLeave().then((ok) => {
+                if (ok) {
+                    baseline = snapshot();
+                    leaving = true;
+                    link.click();
+                    leaving = false;
+                }
+                return ok;
+            });
         };
         window.addEventListener('beforeunload', beforeUnload);
         document.addEventListener('click', guardNavigation, true);

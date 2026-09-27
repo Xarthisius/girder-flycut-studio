@@ -2,6 +2,10 @@
 // a Girder server, or the builder's closure -- which is what lets tests import
 // it instead of slicing it out of the source.
 export { assessConfiguration } from './assess.js';
-export { makeLaser, restoreImportedLaser, PALETTE } from './laser.js';
+export {
+    makeLaser, restoreImportedLaser, PALETTE, LASER_LIMIT,
+    normalizeLayerNames, moveLaser, applyMaterialDefaults,
+    usedLaserCount, resolveLaserForLayer
+} from './laser.js';
 export { selectableConfigs, groupedOptions, byNewest, STAGES } from './records.js';
 export { exportDecision, INCOMPLETE, UNACKNOWLEDGED } from './validate.js';
