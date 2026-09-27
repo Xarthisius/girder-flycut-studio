@@ -38,3 +38,27 @@ export function groupedOptions(records, { disableRegistered = false, escapeHtml,
         return `<optgroup ${disabled} label="${label}">${entries.map(option).join('')}</optgroup>`;
     }).join('');
 }
+
+/** When a record was last saved, in the reader's locale. Empty if never. */
+export function savedTime(record) {
+    return record?.savedAt ? new Date(record.savedAt).toLocaleString() : '';
+}
+
+/**
+ * A whole picker's `<select>` markup: the placeholder, then the grouped records.
+ *
+ * The placeholder says something different when there is nothing to choose,
+ * which is the only reason this is not just groupedOptions with a prefix.
+ */
+export function selectMarkup(records, {
+    placeholder, emptyPlaceholder = placeholder, disableRegistered = false, escapeHtml, savedTime: format
+} = {}) {
+    const label = records.length ? placeholder : emptyPlaceholder;
+    return `<option value="">${escapeHtml(label)}</option>` +
+        groupedOptions(records, { disableRegistered, escapeHtml, savedTime: format });
+}
+
+/** Keep a picker's selection across a refresh, but only if it is still offered. */
+export function keepSelection(records, selected) {
+    return records.some((record) => record._id === selected) ? selected : '';
+}

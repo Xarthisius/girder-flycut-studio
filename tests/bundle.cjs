@@ -1,10 +1,11 @@
 // Loads the built UMD bundle against a stub `girder` global and checks it
-// wires itself up. Everything the shell does at load time is covered here; rendering
-// needs a DOM and a live server, so it is not.
+// wires itself up. Everything the shell does at load time is covered here;
+// rendering needs a DOM and a live server, so it is not.
 //
-// This exists because the bundle is assembled by string substitution in
-// build_dashboard.py. `node --check` proves it parses; only running it proves
-// the pieces were substituted into the right places.
+// `node --check` proves the bundle parses. Only running it proves that every
+// module reached the bundle, that nothing needs a DOM at evaluation, and that
+// the dashboard registers itself against the contract girder-dashboards
+// expects.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -14,25 +15,41 @@ const bundle = fs.readFileSync(
     path.join(__dirname, '../girder_flycut/web_client/dist/girder-plugin-flycut.umd.cjs'), 'utf8');
 
 const registered = [];
-let extendedSpec = null;
+// Every View.extend() the bundle performs, in order. There are several now
+// that the screens are views, so the shell is found by what it defines rather
+// than by being the last one.
+const specs = [];
+
+/** Minimal stand-in for Backbone's extend, chainable so a view can subclass one. */
+function extend(spec) {
+    specs.push(spec);
+    const Child = function () {};
+    Child.prototype = Object.create(this.prototype);
+    Object.assign(Child.prototype, spec);
+    Child.extend = extend;
+    return Child;
+}
 
 function View() {}
-View.extend = function (spec) {
-    extendedSpec = spec;
-    const Child = function () {};
-    Child.prototype = Object.create(View.prototype);
-    Object.assign(Child.prototype, spec);
-    return Child;
-};
+View.extend = extend;
+
+function Model() {}
+Model.extend = extend;
 
 const girder = {
+    Backbone: { Model },
     views: { View },
     rest: { restRequest: () => Promise.reject(new Error('not called at load')) },
     auth: { getCurrentUser: () => null },
     plugins: { dashboards: { registerDashboard: (key, spec) => registered.push([key, spec]) } }
 };
 
+// No document and no window: anything in the bundle that reaches for either at
+// evaluation rather than at render throws here rather than in a browser.
 vm.runInNewContext(bundle, { girder, document: undefined, window: undefined });
+
+const extendedSpec = specs.find((spec) => spec.startBuilder);
+assert(extendedSpec, 'the dashboard shell must be one of the extended views');
 
 assert.equal(registered.length, 1, 'the bundle must register exactly one dashboard');
 const [key, spec] = registered[0];
@@ -46,6 +63,20 @@ for (const method of ['render', 'startBuilder', 'destroy']) {
 assert.equal(extendedSpec.startBuilder.constructor.name, 'AsyncFunction',
     'startBuilder awaits the builder, so it has to stay async');
 console.log('View defines render, startBuilder and destroy.');
+
+// The screens are views of their own, each with an events hash and an id that
+// showScreen() addresses it by. A screen that lost its id would be invisible to
+// navigation and nothing else would notice.
+const SCREEN_IDS = ['workflowHome', 'configurationPicker', 'lightburnPicker',
+    'registrationPicker', 'adminSettingsScreen'];
+const screens = specs.filter((spec) => SCREEN_IDS.includes(spec.id));
+assert.equal(screens.length, SCREEN_IDS.length,
+    `expected a view per screen, found ${screens.map((s) => s.id)}`);
+for (const screen of screens) {
+    assert.equal(typeof screen.events, 'object', `${screen.id} needs an events hash`);
+    assert(Object.keys(screen.events).length, `${screen.id} has an empty events hash`);
+}
+console.log(`Each of the ${screens.length} screens is a view with an events hash.`);
 
 // Vite minifies the lib build, so every identifier in the bundle is mangled
 // and only runtime behaviour and string payloads can be asserted here. The

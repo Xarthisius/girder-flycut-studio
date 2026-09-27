@@ -1,39 +1,47 @@
 /**
  * Flyer Studio dashboard shell.
  *
- * The markup is one plain file per screen in ./templates/, imported as
- * strings and concatenated here. They were a single file until the screens
- * became views; splitting first means C2 translates each fragment to Pug
- * rather than translating one file and immediately re-splitting it. The
- * stylesheet is imported for its side effect: Vite emits it as style.css and
- * load() registers it, which is why it is scoped under .g-flycut-dashboard
- * rather than relying on a shadow root. They used to be sliced out of config_builder/static/ at
- * build time by a generator full of literal substitutions; Decision 3 settled
- * that the plugin owns its sources, so the generator is gone and with it the
- * last of issues A2 and A6.
+ * The four workflow screens are views over a shared WorkflowModel and render
+ * themselves. What is left here is the chrome they sit in -- which screen is
+ * showing, the status line, the busy guard -- and the builder, which is still
+ * one closure and becomes views next.
+ *
+ * The markup is one plain file per screen in ./templates/, imported as strings.
+ * Three are still concatenated here: the topbar, the status line and the
+ * builder have no view of their own yet. The stylesheet is imported for its
+ * side effect: Vite emits it as style.css and load() registers it, which is why
+ * it is scoped under .g-flycut-dashboard rather than relying on a shadow root.
  */
 import createBuilder from './builder.js';
-import { groupedOptions, selectableConfigs } from './core/records.js';
-import { workflowState } from './core/workflow.js';
+import { savedTime } from './core/records.js';
+import { runSubmission } from './core/submit.js';
+import { keepsActiveConfig } from './core/workflow.js';
+import WorkflowModel from './models/WorkflowModel.js';
 import './styles/dashboard.css';
-import { escapeHtml, request } from './util.js';
+import builderTemplate from './templates/builder.html?raw';
+import statusBarTemplate from './templates/statusBar.html?raw';
+import topbarTemplate from './templates/topbar.html?raw';
+import { ask, escapeHtml, request } from './util.js';
 import AdminSettingsView from './views/AdminSettingsView.js';
-import builder from './templates/builder.html?raw';
-import configurationPicker from './templates/configurationPicker.html?raw';
-import lightburnPicker from './templates/lightburnPicker.html?raw';
-import registrationPicker from './templates/registrationPicker.html?raw';
-import statusBar from './templates/statusBar.html?raw';
-import topbar from './templates/topbar.html?raw';
-import workflowHome from './templates/workflowHome.html?raw';
+import ConfigurationPickerView from './views/ConfigurationPickerView.js';
+import GenerationPickerView from './views/GenerationPickerView.js';
+import RegistrationPickerView from './views/RegistrationPickerView.js';
+import WorkflowHomeView from './views/WorkflowHomeView.js';
 
-// Screen order is DOM order, and the builder queries the whole mount at
-// construction, so every screen has to be present before createBuilder runs.
-const SCREENS = [
-    topbar, workflowHome, configurationPicker, lightburnPicker,
-    registrationPicker, statusBar, builder
-];
-const $$ = girder.$;
 const View = girder.views.View;
+/** Every screen, which is what showScreen() hides all but one of. */
+const SCREEN_IDS = [
+    'workflowHome', 'configurationPicker', 'lightburnPicker', 'registrationPicker',
+    'builderScreen', 'adminSettingsScreen'
+];
+const PAGE_LABELS = {
+    workflowHome: 'Home',
+    configurationPicker: 'Configuration',
+    lightburnPicker: 'Generation',
+    registrationPicker: 'Registration',
+    adminSettingsScreen: 'Settings'
+};
+
 const Dashboard = View.extend({
     render: function () {
         this.el.replaceChildren();
@@ -48,15 +56,17 @@ const Dashboard = View.extend({
         // outside the shadow root, and that exception becomes the normal case.
         const mount = document.createElement('div');
         mount.className = 'g-flycut-dashboard';
-        mount.innerHTML = SCREENS.join('');
+        // The screen views are inserted between these, so the document order
+        // stays topbar, the four screens, the status line, the admin screen, the
+        // builder -- the order the one markup file used to have.
+        mount.innerHTML = topbarTemplate + statusBarTemplate + builderTemplate;
         this.el.append(mount);
         this.cleanupBuilder = null;
         this.ready = this.startBuilder(mount, currentUser).catch((error) => { mount.textContent = error.message; });
         return this;
     },
     startBuilder: async function (mount, currentUser) {
-        let activeConfig = null;
-        let saved = [];
+        const workflow = new WorkflowModel();
         const fetch = async (url, options = {}) => {
             if (url === '/api/cache') return { ok: true, json: async () => ({ operators: [currentUser.get('login')], field_names: state.knownFieldNames }) };
             let data;
@@ -71,16 +81,15 @@ const Dashboard = View.extend({
             const result = await request(url.replace('/api/', ''), options.method || 'GET', data);
             return { ok: true, json: async () => result };
         };
-        // The builder owns the form; these are the bindings the workflow
-        // chrome below needs from it.
+        // The builder owns the form; these are the bindings the workflow chrome
+        // below needs from it. It queries the whole mount at construction and
+        // everything it looks for is in the topbar or the builder markup, which
+        // is why the screen views can be built after it rather than before.
         const {
             $, changeTemplate, cleanupTooltips, clearValidation, configObject,
             confirmExport, finalConfigObject, importJson, makeLaser,
             renderCustomFields, state, toast, updateAll, updateAssignmentUI
         } = await createBuilder({ mount, currentUser, fetch });
-        let busy = false;
-        let completeWorkflow = false;
-        let readOnly = false;
         let baseline = '';
         const snapshot = () => JSON.stringify({
             config: configObject(),
@@ -89,86 +98,35 @@ const Dashboard = View.extend({
             lasers: state.laserParams,
             name: $('#saveAsName').value
         });
-        const dirty = () => !readOnly && !$('#builderScreen').classList.contains('hidden') && snapshot() !== baseline;
-        // girder.dialog.confirm only calls back on yes, so "no" is the modal
-        // closing without that having happened.
-        const ask = (text, yesText) => new Promise((resolve) => {
-            let confirmed = false;
-            girder.dialog.confirm({
-                text,
-                yesText,
-                yesClass: 'btn-danger',
-                confirmCallback: () => { confirmed = true; resolve(true); }
-            });
-            $$('#g-dialog-container').one('hidden.bs.modal', () => {
-                if (!confirmed) resolve(false);
-            });
-        });
+        const dirty = () => !workflow.get('readOnly') && !$('#builderScreen').classList.contains('hidden') && snapshot() !== baseline;
         const canLeave = async () => !dirty() || await ask(
             'You have unsaved changes. Leave without saving? Choose Cancel to return and save.',
             'Leave');
         const status = (message) => { $('#runStatus').textContent = message; };
         const showScreen = (id) => {
-            for (const screen of ['workflowHome', 'configurationPicker', 'lightburnPicker', 'registrationPicker', 'builderScreen', 'adminSettingsScreen']) { $('#' + screen).classList.toggle('hidden', screen !== id); }
-            $('#currentPageLabel').textContent = { workflowHome: 'Home', configurationPicker: 'Configuration', lightburnPicker: 'Generation', registrationPicker: 'Registration', builderScreen: readOnly ? 'View configuration' : 'Configure flyer stack' }[id];
+            for (const screen of SCREEN_IDS) { $('#' + screen).classList.toggle('hidden', screen !== id); }
+            $('#currentPageLabel').textContent = id === 'builderScreen'
+                ? (workflow.get('readOnly') ? 'View configuration' : 'Configure flyer stack')
+                : PAGE_LABELS[id] || '';
             $('#builderActions').classList.toggle('hidden', id !== 'builderScreen');
             status('');
         };
-        const home = () => { completeWorkflow = false; showScreen('workflowHome'); renderHome(); };
+        const home = () => { workflow.set('completeWorkflow', false); showScreen('workflowHome'); };
+        const refresh = async () => {
+            const stacks = await workflow.fetchAll();
+            state.submittedStackIds = stacks.submittedStackIds;
+            state.stackStates = stacks.stackStates;
+        };
         const configure = async (automated) => {
-            completeWorkflow = automated;
-            if (automated && activeConfig && (activeConfig.status !== 'draft' || activeConfig.canEdit === false)) activeConfig = null;
-            $('#configurationPickerTitle').textContent = automated ? 'Complete Workflow' : 'Configuration';
-            $('#completeWorkflowHint').classList.toggle('hidden', !automated);
+            workflow.set('completeWorkflow', automated);
+            if (!keepsActiveConfig(workflow.get('activeConfig'), automated)) workflow.set('activeConfig', null);
             $('#submitConfigBtn').textContent = automated ? 'Submit, generate & register' : 'Submit';
             await refresh();
             showScreen('configurationPicker');
         };
-        const savedTime = (record) => record?.savedAt ? new Date(record.savedAt).toLocaleString() : '';
-        // The decision is core/workflow.js; this is the part that writes to the
-        // DOM. Every control comes back with the same four optional keys, so
-        // there is one loop rather than twenty-five assignments.
-        const applyState = (controls) => {
-            for (const [selector, spec] of Object.entries(controls)) {
-                const node = $(selector);
-                if ('text' in spec) { node.textContent = spec.text; }
-                if ('disabled' in spec) { node.disabled = spec.disabled; }
-                if ('hidden' in spec) { node.classList.toggle('hidden', spec.hidden); }
-                if ('href' in spec) { node.href = spec.href; }
-            }
-        };
-        const renderHome = () => {
-            applyState(workflowState({
-                activeConfig,
-                saved,
-                busy,
-                generationId: $('#submittedConfigs').value,
-                registrationId: $('#registrationConfigs').value
-            }));
-            $('#artifacts').replaceChildren();
-        };
-        const refresh = async () => {
-            [saved, state.submittedStackIds, state.stackStates] = await Promise.all([request('config'), request('submitted-stacks'), request('stack-states')]);
-            const options = (records, disableRegistered = false) =>
-                groupedOptions(records, { disableRegistered, escapeHtml, savedTime });
-            const submitted = saved.filter((record) => ['submitted', 'generated'].includes(record.status));
-            const configurations = selectableConfigs(saved, completeWorkflow);
-            $('#savedConfigs').innerHTML = '<option value="">New configuration</option>' + options(configurations);
-            const selectedSubmission = $('#submittedConfigs').value;
-            $('#submittedConfigs').innerHTML = '<option value="">' + (submitted.length ? 'Choose a submitted configuration' : 'No submitted configurations') + '</option>' + options(submitted, true);
-            if (submitted.some((record) => record._id === selectedSubmission && record.status !== 'registered')) $('#submittedConfigs').value = selectedSubmission;
-            const selectedRegistration = $('#registrationConfigs').value;
-            const generated = saved.filter((record) => ['generated', 'registered'].includes(record.status));
-            $('#registrationConfigs').innerHTML = '<option value="">' + (generated.length ? 'Choose a generated configuration' : 'No generated configurations') + '</option>' + options(generated);
-            if (generated.some((record) => record._id === selectedRegistration)) $('#registrationConfigs').value = selectedRegistration;
-            if (activeConfig) {
-                activeConfig = saved.find((record) => record._id === activeConfig._id) || activeConfig;
-                $('#savedConfigs').value = configurations.some((record) => record._id === activeConfig._id) ? activeConfig._id : '';
-            }
-            renderHome();
-        };
         const setReadOnly = (value) => {
-            readOnly = value;
+            const activeConfig = workflow.get('activeConfig');
+            workflow.set('readOnly', value);
             state.viewStatus = value ? activeConfig.status[0].toUpperCase() + activeConfig.status.slice(1) : null;
             $('#stackid').readOnly = false;
             $('#autoStackIdBtn').setAttribute('aria-pressed', 'false');
@@ -199,27 +157,23 @@ const Dashboard = View.extend({
         // A disabled fieldset blocks inputs; explicitly block HTML drag/reorder as well.
         for (const eventName of ['dragstart', 'drop', 'keydown']) {
             $('#configForm').addEventListener(eventName, (event) => {
-                if (readOnly) { event.preventDefault(); event.stopImmediatePropagation(); }
+                if (workflow.get('readOnly')) { event.preventDefault(); event.stopImmediatePropagation(); }
             }, true);
         }
-        // One request at a time, with the four controls the busy flag does not
-        // reach disabled for its duration. Split from act() so a child view can
-        // run under the same guard without owning a listener.
+        // One request at a time, with the four builder controls the model does
+        // not reach disabled for its duration -- the screens grey themselves out
+        // by listening for `busy`. Split from act() so a child view can run
+        // under the same guard without owning a listener.
+        const builderControls = (disabled) => {
+            for (const id of ['#saveGirderBtn', '#submitConfigBtn', '#backWorkflowBtn', '#resetBtn']) $(id).disabled = disabled;
+        };
         const guard = (fn) => async () => {
-            if (busy) return;
-            busy = true;
-            $('#saveGirderBtn').disabled = true;
-            $('#submitConfigBtn').disabled = true;
-            $('#backWorkflowBtn').disabled = true;
-            $('#resetBtn').disabled = true;
-            renderHome();
+            if (workflow.get('busy')) return;
+            workflow.set('busy', true);
+            builderControls(true);
             try { await fn(); } catch (error) { status(error.message); toast(error.message); } finally {
-                busy = false;
-                $('#saveGirderBtn').disabled = false;
-                $('#submitConfigBtn').disabled = false;
-                $('#backWorkflowBtn').disabled = false;
-                $('#resetBtn').disabled = false;
-                renderHome();
+                workflow.set('busy', false);
+                builderControls(false);
             }
         };
         const act = (id, fn) => $(id).addEventListener('click', guard(fn));
@@ -233,7 +187,7 @@ const Dashboard = View.extend({
             }
         };
         act('#browseTemplateBtn', async () => {
-            if (readOnly) return;
+            if (workflow.get('readOnly')) return;
             const options = await request('options');
             if (!options.workspaceFolderId) throw new Error('Configure a Flyer Studio workspace first.');
             const workspaceRoot = new girder.models.FolderModel({ _id: options.workspaceFolderId });
@@ -272,7 +226,7 @@ const Dashboard = View.extend({
             picker.$('.g-hierarchy-widget-container').after(uploadLink);
         });
         act('#autoStackIdBtn', async () => {
-            if (readOnly) return;
+            if (workflow.get('readOnly')) return;
             if ($('#stackid').readOnly) {
                 $('#stackid').readOnly = false;
                 $('#autoStackIdBtn').setAttribute('aria-pressed', 'false');
@@ -291,51 +245,45 @@ const Dashboard = View.extend({
             $('#stackid').readOnly = false;
             $('#autoStackIdBtn').setAttribute('aria-pressed', 'false');
         });
-        // The admin screen is its own view. The shell keeps only what crosses
-        // the boundary: the button that opens it, screen visibility, and a
-        // refresh once the policy it governs has changed.
-        $('#adminSettingsBtn').classList.add('hidden');
-        const adminSettingsView = new AdminSettingsView({
+
+        // ---- the screens ------------------------------------------------
+        // Each renders itself from the model. The shell wires only what crosses
+        // the boundary: navigation, and anything that touches the builder.
+        const screenOptions = {
             parentView: this,
+            model: workflow,
             guard,
-            onSaved: refresh
+            onChanged: async (message) => { await refresh(); status(message); }
+        };
+        const homeView = new WorkflowHomeView(screenOptions);
+        const configPickerView = new ConfigurationPickerView(screenOptions);
+        const generationView = new GenerationPickerView(screenOptions);
+        const registrationView = new RegistrationPickerView(screenOptions);
+        const adminSettingsView = new AdminSettingsView({
+            parentView: this, guard, onSaved: refresh
         });
+        for (const view of [homeView, configPickerView, generationView, registrationView]) {
+            mount.insertBefore(view.render().el, $('#runStatus'));
+        }
         mount.insertBefore(adminSettingsView.render().el, $('#builderScreen'));
+
+        this.listenTo(homeView, 'g:configure', (automated) => guard(() => configure(automated))());
+        this.listenTo(homeView, 'g:generation', guard(async () => { await refresh(); showScreen('lightburnPicker'); }));
+        this.listenTo(homeView, 'g:registration', guard(async () => { await refresh(); showScreen('registrationPicker'); }));
+        this.listenTo(homeView, 'g:admin', () => adminSettingsView.open());
         this.listenTo(adminSettingsView, 'g:open', () => showScreen('adminSettingsScreen'));
-        this.listenTo(adminSettingsView, 'g:close', home);
-        $('#adminSettingsBtn').addEventListener('click', () => adminSettingsView.open());
-        act('#configurationStepBtn', () => configure(false));
-        act('#completeWorkflowBtn', () => configure(true));
-        act('#lightburnStepBtn', async () => { await refresh(); showScreen('lightburnPicker'); });
-        act('#registerBtn', async () => { await refresh(); showScreen('registrationPicker'); });
-        $('#registrationBackBtn').addEventListener('click', home);
-        $('#submittedConfigs').addEventListener('change', renderHome);
-        $('#registrationConfigs').addEventListener('change', renderHome);
-        act('#generateBtn', async () => {
-            await request('config/' + $('#submittedConfigs').value + '/generate', 'POST');
-            await refresh(); status('Files generated.');
-        });
-        act('#deleteFilesBtn', async () => {
-            if (!await ask('Delete this configuration’s generated files? It will return to ' +
-                'submitted and its Stack ID can be reused.', 'Delete')) return;
-            await request('config/' + $('#submittedConfigs').value + '/files', 'DELETE');
-            await refresh(); status('Generated files deleted. Configuration is submitted.');
-        });
-        act('#registerStackBtn', async () => {
-            await request('config/' + $('#registrationConfigs').value + '/register', 'POST');
-            await refresh(); status('Stack IGSN registered. This Stack ID can no longer be reused.');
-        });
-        $('#configPickerBackBtn').addEventListener('click', home);
-        $('#lightburnPickerBackBtn').addEventListener('click', home);
-        $('#savedConfigs').addEventListener('change', () => {
-            activeConfig = saved.find((record) => record._id === $('#savedConfigs').value) || null;
-            status(''); renderHome();
-        });
-        act('#buildConfigBtn', async () => {
-            if (completeWorkflow && activeConfig && (activeConfig.status !== 'draft' || activeConfig.canEdit === false)) {
-                activeConfig = null;
-                $('#savedConfigs').value = '';
+        for (const view of [configPickerView, generationView, registrationView, adminSettingsView]) {
+            this.listenTo(view, 'g:home g:close', home);
+        }
+        this.listenTo(configPickerView, 'g:selected', () => status(''));
+        this.listenTo(configPickerView, 'g:build', guard(async () => {
+            // Switching into Complete Workflow after choosing is the case this
+            // covers: the selection is re-checked on the way in, not only on the
+            // way to the screen.
+            if (!keepsActiveConfig(workflow.get('activeConfig'), workflow.get('completeWorkflow'))) {
+                workflow.set('activeConfig', null);
             }
+            const activeConfig = workflow.get('activeConfig');
             if (activeConfig) {
                 const template = (activeConfig.config.run_parameters || activeConfig.config.run_params)?.template;
                 if (template?.startsWith('girder:')) addPortalTemplate(await request('templates/' + encodeURIComponent(template)));
@@ -345,17 +293,19 @@ const Dashboard = View.extend({
             setReadOnly(Boolean(activeConfig && (activeConfig.status !== 'draft' || activeConfig.canEdit === false)));
             baseline = snapshot();
             showScreen('builderScreen');
-        });
+        }));
+
+        // ---- the builder's chrome ---------------------------------------
         $('#studioHomeLink').addEventListener('click', async (event) => {
             event.preventDefault();
-            if (busy) return;
+            if (workflow.get('busy')) return;
             if (await canLeave()) home();
         });
         act('#resetBtn', async () => {
-            if (readOnly) return;
+            if (workflow.get('readOnly')) return;
+            const activeConfig = workflow.get('activeConfig');
             if (activeConfig?.status === 'draft') await request('config/' + activeConfig._id, 'DELETE');
-            activeConfig = null;
-            $('#savedConfigs').value = '';
+            workflow.set('activeConfig', null);
             $('#saveAsName').value = '';
             blank();
             baseline = snapshot();
@@ -366,8 +316,7 @@ const Dashboard = View.extend({
             if (await canLeave()) showScreen('configurationPicker');
         });
         $('#editCopyBtn').addEventListener('click', () => {
-            activeConfig = null;
-            $('#savedConfigs').value = '';
+            workflow.set('activeConfig', null);
             setReadOnly(false);
             $('#currentPageLabel').textContent = 'Configure flyer stack';
             $('#builderMode').textContent = 'Editing a copy · save creates a new configuration';
@@ -380,52 +329,50 @@ const Dashboard = View.extend({
         const persist = async (submit) => {
             const captured = snapshot();
             const config = submit ? finalConfigObject() : draftObject();
-            activeConfig = await request('config', 'POST', {
+            const existing = workflow.get('activeConfig');
+            workflow.set('activeConfig', await request('config', 'POST', {
                 config: JSON.stringify(config),
                 name: $('#saveAsName').value.trim(),
-                id: activeConfig?.status === 'draft' ? activeConfig._id : '',
+                id: existing?.status === 'draft' ? existing._id : '',
                 submit,
                 validated: submit && $('#validationAck').checked
-            });
+            }));
             baseline = captured;
             await refresh();
         };
         act('#saveGirderBtn', async () => {
             await persist(false);
-            $('#builderMode').textContent = `Saved ${savedTime(activeConfig)}`;
+            $('#builderMode').textContent = `Saved ${savedTime(workflow.get('activeConfig'))}`;
             toast('Draft saved.');
         });
+        // The stack bookkeeping is re-read first, so the form validates against
+        // what is true now rather than what was true when the builder opened.
+        // The ordering and the recovery are core/submit.js.
         act('#submitConfigBtn', async () => {
             [state.submittedStackIds, state.stackStates] = await Promise.all([request('submitted-stacks'), request('stack-states')]);
             updateAll();
-            if (!confirmExport()) return;
-            await persist(true);
-            setReadOnly(true);
-            if (!completeWorkflow) {
+            const endpoint = (suffix) => 'config/' + workflow.get('activeConfig')._id + suffix;
+            const outcome = await runSubmission({
+                completeWorkflow: workflow.get('completeWorkflow'),
+                confirmExport,
+                persist: () => persist(true),
+                setReadOnly: () => setReadOnly(true),
+                generate: async () => workflow.set('activeConfig', await request(endpoint('/generate'), 'POST')),
+                register: async () => workflow.set('activeConfig', await request(endpoint('/register'), 'POST')),
+                status
+            });
+            if (!outcome) return;
+            if (outcome.screen === 'workflowHome') {
                 home();
-                status('Configuration submitted. It is now read-only.');
+                status(outcome.message);
                 return;
             }
-            const endpoint = 'config/' + activeConfig._id;
-            let stage = 'generation';
-            try {
-                status('Configuration submitted. Generating files…');
-                activeConfig = await request(endpoint + '/generate', 'POST');
-                stage = 'registration';
-                status('Files generated. Registering stack IGSN…');
-                activeConfig = await request(endpoint + '/register', 'POST');
-            } catch (error) {
-                await refresh();
-                showScreen(stage === 'generation' ? 'lightburnPicker' : 'registrationPicker');
-                $(stage === 'generation' ? '#submittedConfigs' : '#registrationConfigs').value = activeConfig._id;
-                renderHome();
-                throw new Error(`Automatic ${stage} stopped: ${error.message} Your saved work is retained; continue from this module.`);
-            }
             await refresh();
-            showScreen('registrationPicker');
-            $('#registrationConfigs').value = activeConfig._id;
-            renderHome();
-            status('Complete: configuration submitted, files generated, and stack IGSN registered.');
+            showScreen(outcome.screen);
+            (outcome.screen === 'lightburnPicker' ? generationView : registrationView)
+                .select(workflow.get('activeConfig')._id);
+            if (outcome.failed) throw new Error(outcome.message);
+            status(outcome.message);
         });
         const beforeUnload = (event) => { if (dirty()) { event.preventDefault(); event.returnValue = ''; } };
         // Asking is asynchronous now, so this can no longer decide inside the

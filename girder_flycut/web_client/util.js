@@ -25,3 +25,27 @@ export function escapeHtml(value = '') {
     div.textContent = value;
     return div.innerHTML;
 }
+
+/**
+ * A yes/no question, as a promise.
+ *
+ * girder.dialog.confirm only calls back on yes, so "no" is the modal closing
+ * without that having happened -- which is why this listens for the hide as
+ * well as for the callback.
+ */
+export function ask(text, yesText) {
+    return new Promise((resolve) => {
+        let confirmed = false;
+        girder.dialog.confirm({
+            text,
+            yesText,
+            yesClass: 'btn-danger',
+            confirmCallback: () => { confirmed = true; resolve(true); }
+        });
+        girder.$('#g-dialog-container').one('hidden.bs.modal', () => {
+            if (!confirmed) {
+                resolve(false);
+            }
+        });
+    });
+}

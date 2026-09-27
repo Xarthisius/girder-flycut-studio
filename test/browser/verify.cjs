@@ -472,6 +472,65 @@ async function reopen(page, base, id) {
             }
         }
 
+        // ---- Complete Workflow ------------------------------------------
+        // The other half of core/submit.js: one click that submits, generates
+        // and registers. It had no browser coverage at all while the
+        // step-by-step path above had plenty, and it is the path with the
+        // failure recovery in it.
+        if (usable) {
+            await reopen(page, BASE, flycut._id);
+            await page.click('#completeWorkflowBtn');
+            await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 20000 });
+            check('Complete Workflow retitles the picker',
+                (await textOf(page, '#configurationPickerTitle')) === 'Complete Workflow');
+            check('it shows the automatic-continuation hint',
+                await visible(page, '#completeWorkflowHint'));
+            check('the submit button says what it will do',
+                (await textOf(page, '#submitConfigBtn')) === 'Submit, generate & register');
+
+            await page.click('#buildConfigBtn');
+            await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 20000 });
+            await page.fill('#operator', ADMIN);
+            const autoStackId = await fillRequiredFields(page, true);
+            await page.click('.g-flycut-dashboard [data-tab="status"]');
+            if (await visible(page, '#validationAckLabel')) {
+                await page.check('#validationAck');
+            }
+            await page.click('#submitConfigBtn');
+            // One click, three server operations. Generation is the slow one.
+            await page.waitForSelector('#registrationPicker:not(.hidden)', { timeout: 120000 })
+                .catch(async (err) => {
+                    const why = await textOf(page, '#runStatus') || await textOf(page, '#toast');
+                    throw new Error(`complete workflow did not finish: ${why || err.message}`);
+                });
+            check('a complete run ends on the registration screen and says so',
+                (await textOf(page, '#runStatus')).startsWith('Complete:'),
+                await textOf(page, '#runStatus'));
+            check('the run’s own configuration is selected on arrival',
+                (await page.inputValue('#registrationConfigs')).length > 0);
+            const autoHint = await textOf(page, '#registrationHint');
+            check('it minted a stack IGSN without a second click',
+                /Registered · .+/.test(autoHint), autoHint);
+            check('and registering it again is refused',
+                await page.locator('#registerStackBtn').isDisabled());
+            const autoStates = await (await fetch(`${BASE}/api/v1/flycut/stack-states`,
+                { headers: { 'Girder-Token': token } })).json();
+            check('its stack ID is spent too',
+                autoStates[autoStackId] === 'registered',
+                `${autoStackId} -> ${autoStates[autoStackId]}`);
+            await page.screenshot({ path: `${SHOTS}/09-complete-workflow.png` });
+        } else {
+            for (const name of ['Complete Workflow retitles the picker',
+                'it shows the automatic-continuation hint',
+                'the submit button says what it will do',
+                'a complete run ends on the registration screen and says so',
+                'the run’s own configuration is selected on arrival',
+                'it minted a stack IGSN without a second click',
+                'and registering it again is refused', 'its stack ID is spent too']) {
+                skip(name, 'no material or template to build a configuration from');
+            }
+        }
+
         // ---- it survives a reload ---------------------------------------
         // Everything above ran in one page session. Re-entering from scratch is
         // what proves the lifecycle wrote to the server rather than to a
