@@ -98,11 +98,19 @@ GIRDER_URL=... GIRDER_ADMIN=... GIRDER_PASSWORD=... node test/browser/verify.cjs
 `seed.py` is pure REST, so the same script serves CI and a live deployment. Everything
 it creates is named "Flyer Studio E2E" or sits under it, and it is idempotent.
 
-`verify.cjs` walks the dashboard the way a person does — gallery, workflow home,
-configuration picker, builder form, generation and registration — and fails on any
-console error, page error or failed request. It asserts on user-visible state rather
-than structure, so Phase 4c can move code without the test being rewritten. It is the
-only thing in the repo that renders the UI; the `.cjs` suites drive DOM stubs.
+`verify.cjs` walks the dashboard the way a person does and drives the whole lifecycle:
+gallery, workflow home, configuration picker, builder form, then submit, generate and
+register. It fails on any console error, page error or failed request. It asserts on
+user-visible state rather than structure, so Phase 4c can move code without the test
+being rewritten. It is the only thing in the repo that renders the UI; the `.cjs` suites
+drive DOM stubs.
+
+**A full run registers a real IGSN.** No external registry is contacted — allocation is
+local while `jsonforms.igsn_service_url` is empty — but each run consumes a stack ID
+permanently, which is the point: the run after it asserts that the spent ID is locked and
+that AUTO picks the next free one. On a throwaway CI database that costs nothing; on a
+shared instance it accumulates one registered configuration per run under the
+"Flyer Studio E2E" collection.
 
 Screenshots land in `test/browser/screenshots/` and are uploaded as a CI artefact.
 

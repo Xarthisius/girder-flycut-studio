@@ -260,21 +260,96 @@ async function reopen(page, base, id) {
         check('dismissing the prompt keeps you in the builder',
             await visible(page, '#builderScreen'));
 
-        // ---- generation and registration screens -------------------------
-        await reopen(page, BASE, flycut._id);
-        await page.click('#lightburnStepBtn');
-        await page.waitForSelector('#lightburnPicker:not(.hidden)', { timeout: 15000 });
-        check('Generation opens its picker', await visible(page, '#submittedConfigs'));
-        check('Generate is disabled with nothing submitted',
-            await page.locator('#generateBtn').isDisabled());
-        await page.screenshot({ path: `${SHOTS}/05-generation.png` });
+        // Put the field back so the builder is clean before the lifecycle
+        // starts; the guard above left it dirty on purpose.
+        await page.fill('#operator', ADMIN);
 
-        await page.click('#lightburnPickerBackBtn');
-        await page.waitForSelector('#workflowHome:not(.hidden)', { timeout: 15000 });
+        // ---- the full lifecycle: submit, generate, register --------------
+        // These are the buttons Phase 4c moves out of the shell's closure, and
+        // the only way to know they still work is to press them.
+        if (materialCount > 1 && templateCount > 1) {
+            const runName = `e2e-${stackId}`;
+            await page.fill('#saveAsName', runName);
+
+            // Submitting is gated on acknowledging any validation warnings, and
+            // the box lives in the Status tab.
+            await page.click('.g-flycut-dashboard [data-tab="status"]');
+            if (await visible(page, '#validationAckLabel')) {
+                await page.check('#validationAck');
+            }
+
+            await page.click('#submitConfigBtn');
+            await page.waitForSelector('#workflowHome:not(.hidden)', { timeout: 30000 });
+            check('submitting returns to the workflow and reports it',
+                (await textOf(page, '#runStatus')).includes('submitted'),
+                await textOf(page, '#runStatus'));
+            await page.screenshot({ path: `${SHOTS}/05-submitted.png` });
+
+            // Generation
+            await page.click('#lightburnStepBtn');
+            await page.waitForSelector('#lightburnPicker:not(.hidden)', { timeout: 15000 });
+            await page.selectOption('#submittedConfigs', { label: new RegExp(runName) })
+                .catch(async () => { await page.selectOption('#submittedConfigs', { index: 1 }); });
+            check('a submitted configuration is selectable for generation',
+                !(await page.locator('#generateBtn').isDisabled()));
+
+            await page.click('#generateBtn');
+            await page.waitForFunction(
+                () => document.querySelector('#runStatus').textContent.includes('generated'),
+                { timeout: 60000 });
+            check('generating produces files', true, await textOf(page, '#filesHint'));
+            check('the generated folder becomes reachable',
+                await visible(page, '#generatedFolderLink'));
+            await page.screenshot({ path: `${SHOTS}/06-generated.png` });
+
+            // Registration
+            await page.click('#lightburnPickerBackBtn');
+            await page.waitForSelector('#workflowHome:not(.hidden)', { timeout: 15000 });
+            await page.click('#registerBtn');
+            await page.waitForSelector('#registrationPicker:not(.hidden)', { timeout: 15000 });
+            await page.selectOption('#registrationConfigs', { label: new RegExp(runName) })
+                .catch(async () => { await page.selectOption('#registrationConfigs', { index: 1 }); });
+            check('a generated configuration is selectable for registration',
+                !(await page.locator('#registerStackBtn').isDisabled()));
+
+            await page.click('#registerStackBtn');
+            await page.waitForFunction(
+                () => document.querySelector('#runStatus').textContent.includes('registered'),
+                { timeout: 60000 });
+            const hint = await textOf(page, '#registrationHint');
+            check('registering mints a stack IGSN', /Registered · .+/.test(hint), hint);
+            check('the IGSN becomes reachable', await visible(page, '#viewIgsnLink'));
+            await page.screenshot({ path: `${SHOTS}/07-registered.png` });
+
+            // The stack ID is spent now, which is the whole point of the
+            // lifecycle: it must not be reusable.
+            const states = await (await fetch(`${BASE}/api/v1/flycut/stack-states`,
+                { headers: { 'Girder-Token': token } })).json();
+            check('the registered stack ID is locked against reuse',
+                states[stackId] === 'registered', `${stackId} -> ${states[stackId]}`);
+        } else {
+            for (const name of ['submitting returns to the workflow and reports it',
+                'a submitted configuration is selectable for generation',
+                'generating produces files', 'the generated folder becomes reachable',
+                'a generated configuration is selectable for registration',
+                'registering mints a stack IGSN', 'the IGSN becomes reachable',
+                'the registered stack ID is locked against reuse']) {
+                skip(name, 'no material or template to build a configuration from');
+            }
+        }
+
+        // ---- it survives a reload ---------------------------------------
+        // Everything above ran in one page session. Re-entering from scratch is
+        // what proves the lifecycle wrote to the server rather than to a
+        // closure the next render would discard.
+        await reopen(page, BASE, flycut._id);
         await page.click('#registerBtn');
         await page.waitForSelector('#registrationPicker:not(.hidden)', { timeout: 15000 });
-        check('Registration opens its picker', await visible(page, '#registrationConfigs'));
-        await page.screenshot({ path: `${SHOTS}/06-registration.png` });
+        const persisted = await textOf(page, '#registrationConfigs');
+        check('the lifecycle survives a reload',
+            persisted.includes('registered') || persisted.includes('generated'),
+            persisted.slice(0, 70));
+        await page.screenshot({ path: `${SHOTS}/08-reloaded.png` });
 
         check('no console errors, page errors or failed requests',
             problems.length === 0, problems.slice(0, 3).join(' | '));

@@ -340,6 +340,11 @@ user-agent rule behind the `hidden` attribute — so two file inputs that are me
 invisible were rendering. Neither lint nor any existing test could have seen it. Fixed,
 and the harness now fails if anything marked `[hidden]` is rendered.
 
+It drives the full lifecycle — submit, generate, register — rather than stopping at the
+screens, because those buttons live in the shell's closure and are exactly what Phase 4c
+moves. A run mints a real stack IGSN against the local allocator and leaves the stack ID
+spent; the next run asserts it is locked and that AUTO picks the next free one.
+
 `DEVELOPMENT.md` calls the existing browser harness "supplementary, not a deployed-portal test".
 girder-dashboards runs ~62 checks against a live instance in CI and caught two defects that way that
 neither its Python tests nor its build could see.
