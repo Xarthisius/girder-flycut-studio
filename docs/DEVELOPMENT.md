@@ -9,33 +9,33 @@ Run the commands below from the repository root.
 
 ## Frontend
 
-Edit `config_builder/static/` for the form and `girder_flycut/client_wrapper.js`,
-`workflow.html`, and `workflow.css` for the dashboard integration. Then run:
+Edit `config_builder/static/` for the form and `girder_flycut/web_client/main.js`,
+`girder_flycut/workflow.html` and `workflow.css` for the dashboard integration. Then:
 
 ```sh
-npm ci                 # once
+npm ci          # once
 npm run lint
-python build_dashboard.py
-node --check girder_flycut/web_client/main.js
-npm test               # the four .cjs suites, including tests/bundle.cjs
+npm run build   # generate sources, then bundle with Vite
+npm test        # the four .cjs suites, including tests/bundle.cjs
 ```
 
-`client_wrapper.js` is ordinary JavaScript: it declares `FLYCUT_STYLES`,
-`FLYCUT_TEMPLATE` and `FLYCUT_BUILDER` as stubs, and `build_dashboard.py` replaces each
-declaration with the real thing. It used to carry `/* STYLES */`-style comment markers in
-expression position, which meant the file did not parse and no editor or linter could read
-it. `tests/bundle.cjs` loads the built artifact against a stub `girder` global and checks
-the substitutions landed and that the shell and builder agree on their shared bindings.
+`npm run build` does three things: checks `setup.py` and `package.json` agree on a
+version, runs `girder_flycut/web_client/build/generate-sources.mjs`, and bundles with
+Vite into `girder_flycut/web_client/dist/`. Neither `generated/` nor `dist/` is committed;
+CI builds both, and the wheel ships only `dist/girder-plugin-flycut.umd.cjs`.
+
+The generator derives the markup, the scoped stylesheet and the configuration builder from
+`config_builder/static/` by substituting literal strings, and asserts a match count for
+each one — markup that moves fails the build instead of quietly dropping a control. It also
+checks that `main.js` and the generated builder agree on their 15 shared bindings, since a
+mismatch would hand the shell `undefined` rather than raising.
+
+`tests/bundle.cjs` loads the built UMD bundle against a stub `girder` global. Vite
+minifies the lib build, so it asserts runtime wiring and payload content rather than
+anything about identifiers.
 
 Formatting rules are switched off in `.eslintrc.json`; `.eslintrc.md` explains why and
 when they come back.
-
-Commit the generated `girder_flycut/web_client/main.js` with the source changes; CI
-rebuilds and fails if it is stale. Each substitution in `build_dashboard.py` asserts how
-many times its needle matches, so markup that moves in `config_builder/static/` breaks the
-build instead of quietly dropping a control.
-This build does not need npm or the original Flyer-Cut-Opt repository. The vendored
-dashboards frontend is prebuilt; rebuild it with its own package scripts if changed.
 
 ## Backend tests and packaging
 

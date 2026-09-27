@@ -1,6 +1,8 @@
-include README.md build_dashboard.py
+include README.md
 recursive-include config_builder/static *.js *.css *.html
-recursive-include girder_flycut *.py *.json *.js *.css *.html *.lbrn2
+recursive-include girder_flycut *.py *.json *.css *.html *.lbrn2
+prune girder_flycut/web_client
+include girder_flycut/web_client/dist/girder-plugin-flycut.umd.cjs
 recursive-include tests *.py *.cjs
 
 recursive-include docs *.md

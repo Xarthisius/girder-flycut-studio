@@ -1,7 +1,10 @@
 __pycache__/
 *.pyc
 *.egg-info/
-build/
+# Root-anchored: a bare `build/` also matched girder_flycut/web_client/build/,
+# silently keeping the source generator out of version control.
+/build/
+vendor/girder-dashboards/build/
 dist/
 .pytest_cache/
 .venv/
@@ -23,3 +26,7 @@ vendor/girder-dashboards/girder_dashboards/web_client/dist/*
 .coverage
 coverage.xml
 htmlcov/
+
+# Generated browser sources and the built bundle
+girder_flycut/web_client/generated/
+girder_flycut/web_client/dist/

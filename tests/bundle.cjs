@@ -1,5 +1,5 @@
-// Loads the built bundle against a stub `girder` global and checks it wires
-// itself up. Everything the shell does at load time is covered here; rendering
+// Loads the built UMD bundle against a stub `girder` global and checks it
+// wires itself up. Everything the shell does at load time is covered here; rendering
 // needs a DOM and a live server, so it is not.
 //
 // This exists because the bundle is assembled by string substitution in
@@ -11,7 +11,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const bundle = fs.readFileSync(
-    path.join(__dirname, '../girder_flycut/web_client/main.js'), 'utf8');
+    path.join(__dirname, '../girder_flycut/web_client/dist/girder-plugin-flycut.umd.cjs'), 'utf8');
 
 const registered = [];
 let extendedSpec = null;
@@ -47,38 +47,16 @@ assert.equal(extendedSpec.startBuilder.constructor.name, 'AsyncFunction',
     'startBuilder awaits the builder, so it has to stay async');
 console.log('View defines render, startBuilder and destroy.');
 
-// The three build inputs must have been substituted, not left as stubs. An
-// empty stylesheet or template would still parse and still register.
-const styles = bundle.match(/const FLYCUT_STYLES = ("(?:[^"\\]|\\.)*");/);
-const template = bundle.match(/const FLYCUT_TEMPLATE = ("(?:[^"\\]|\\.)*");/);
-assert.ok(styles && JSON.parse(styles[1]).length > 1000, 'styles were not substituted');
-assert.ok(template && JSON.parse(template[1]).length > 1000, 'template was not substituted');
-assert.ok(JSON.parse(styles[1]).includes(':host'), 'styles must be retargeted at the shadow root');
-assert.ok(JSON.parse(template[1]).includes('id="workflowHome"'), 'template must carry the workflow shell');
-assert.ok(/const FLYCUT_BUILDER = async function/.test(bundle), 'builder was not substituted');
-assert.ok(!/const FLYCUT_BUILDER = \(\) => \(\{\}\);/.test(bundle), 'builder is still the stub');
-console.log('Styles, template and builder were all substituted.');
-
-// The shell destructures the builder's exports; a mismatch yields undefined at
-// runtime rather than an error. build_dashboard.py already fails the build on a
-// mismatch -- this checks the same thing on the artifact that actually ships.
+// Vite minifies the lib build, so every identifier in the bundle is mangled
+// and only runtime behaviour and string payloads can be asserted here. The
+// shell/builder interface is checked instead at generation time, by
+// build/generate-sources.mjs, which fails the build on a mismatch.
 //
-// Anchored by index, not regex: the file is one 900-line closure and a lazy
-// pattern happily matches the wrong `const {` hundreds of lines earlier.
-const callAt = bundle.indexOf('} = await FLYCUT_BUILDER(');
-assert.ok(callAt > 0, 'the shell must call the builder');
-const openAt = bundle.lastIndexOf('const {', callAt);
-const destructured = bundle.slice(openAt + 'const {'.length, callAt)
-    .split(',').map((n) => n.trim()).filter(Boolean).sort();
-
-// app.js indents every one of its own returns, so a `return {` at column zero
-// is unambiguously the one build_dashboard.py appends.
-const returnAt = bundle.lastIndexOf('\nreturn {');
-assert.ok(returnAt > 0, 'the generated builder must return its exports');
-const returned = bundle.slice(returnAt + '\nreturn {'.length, bundle.indexOf('}', returnAt))
-    .split(',').map((n) => n.trim()).filter(Boolean).sort();
-
-assert.deepEqual(destructured, returned,
-    'client_wrapper.js and the generated builder disagree on their interface');
-assert.ok(returned.length >= 15, `expected at least 15 shared bindings, got ${returned.length}`);
-console.log(`Shell and builder agree on all ${returned.length} shared bindings.`);
+// What matters is that the payloads reached the artifact at all: an empty
+// stylesheet or template would still parse and still register.
+assert.ok(bundle.includes(':host'),
+    'the stylesheet must be in the bundle, retargeted at the shadow root');
+assert.ok(bundle.includes('workflowHome'),
+    'the workflow markup must be in the bundle');
+assert.ok(bundle.length > 50000, `bundle looks truncated at ${bundle.length} bytes`);
+console.log('Stylesheet and workflow markup are present in the bundle.');

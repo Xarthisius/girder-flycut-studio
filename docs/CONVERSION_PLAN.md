@@ -69,14 +69,14 @@ effort. Each issue names the phase that closes it.
 
 | ID | Severity | Phase | Issue |
 |---|---|---|---|
-| A1 | Critical | 1 | The client source of record is not valid JavaScript |
+| A1 | Critical | ~~1~~ ✓ | The client source of record is not valid JavaScript |
 | A2 | Critical | 0 | The build is exact-string replacement that fails silently |
-| A3 | Major | 2 | No Vite build; static content is served from a source directory |
-| A4 | Major | 2 | A 909-line generated file is committed |
-| A5 | Major | 1 | No `package.json` for the client |
+| A3 | Major | ~~2~~ ✓ | No Vite build; static content is served from a source directory |
+| A4 | Major | ~~2~~ ✓ | A 909-line generated file is committed |
+| A5 | Major | ~~1~~ ✓ | No `package.json` for the client |
 | A6 | Minor | 4 | CSS is rewritten by regex at build time |
 | B1 | Critical | 0 | There is no CI |
-| B2 | Critical | 0 | No lint configuration of any kind |
+| B2 | Critical | ~~0~~ ✓ | No lint configuration of any kind |
 | B3 | Major | 0 | 34 ruff findings, 8 of them genuine dead code |
 | B4 | Minor | 5 | 253 lines exceed 100 characters |
 | B5 | Major | ~~6~~ 0 | The Python test suite has no reproducible environment |
@@ -100,7 +100,7 @@ effort. Each issue names the phase that closes it.
 | F1 | Major | 6 | A stale committed copy of a PyPI dependency |
 | F2 | Major | ~~6~~ 0 | A required dependency is not installable from any index |
 | F3 | Minor | 6 | Thin package metadata and no `LICENSE` |
-| F4 | Minor | 2 | No single source of version truth |
+| F4 | Minor | ~~2~~ ✓ | No single source of version truth |
 | G1 | Minor | 6 | A complete admin screen is built, wired, and permanently hidden |
 
 ---
@@ -119,7 +119,16 @@ generated output can.
 those three as generated ES modules instead of substituting strings into a comment.
 
 #### A2 — The build is exact-string replacement that fails silently
-**Critical · Phase 0**
+**Critical · Phase 0 (guarded) · still open pending Decision 3**
+
+*Revised in Phase 2.* Guarded in Phase 0 and ported from Python to JavaScript in Phase 2,
+but **not removed**. The plan said retiring `build_dashboard.py` would "remove every
+needle"; that was wrong. The needles exist because the markup is derived from
+`config_builder/static/index.html`, not because a Python script did the deriving. They
+disappear only when the markup stops being sliced out of the standalone builder, which is
+**Decision 3**. Until then every substitution asserts its match count, so a moved needle
+fails the build loudly — and the eslint formatting rules stay off, because reformatting
+`app.js` moves the text they match.
 
 Fifteen `str.replace()` calls at `build_dashboard.py:8–28` match literal markup such as
 `<span class="input-wrap"><input id="stackid" …></span>`. A whitespace change in `index.html` turns

@@ -5,8 +5,10 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const source = fs.readFileSync(path.join(__dirname, '../girder_flycut/client_wrapper.js'), 'utf8');
-const body = source.split('const renderHome = () => {')[1].split('\n            const refresh =')[0].replace(/};\s*$/, '');
+// NOTE: these boundaries include indentation, so de-indenting main.js moves
+// them. That is issue D1; Phase 3 replaces the slicing with real imports.
+const source = fs.readFileSync(path.join(__dirname, '../girder_flycut/web_client/main.js'), 'utf8');
+const body = source.split('const renderHome = () => {')[1].split('\n        const refresh =')[0].replace(/};\s*$/, '');
 function render(activeConfig, busy = false) {
     const nodes = {};
     const $ = selector => nodes[selector] ||= {
