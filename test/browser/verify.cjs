@@ -272,6 +272,18 @@ async function reopen(page, base, id) {
         await page.screenshot({ path: `${SHOTS}/03-builder.png` });
 
         // ---- filling it in ----------------------------------------------
+        // A clean form must not prompt at all. This was asserted by slicing
+        // canLeave() out of main.js and eval'ing it; it is checked against the
+        // real page now, which is what let that slice go.
+        const cleanDialogs = nativeDialogs;
+        await page.click('#backWorkflowBtn');
+        await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 15000 });
+        check('a clean form leaves without prompting',
+            nativeDialogs === cleanDialogs &&
+            !(await visible(page, '#g-dialog-container .modal-dialog')));
+        await page.click('#buildConfigBtn');
+        await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 15000 });
+
         const usable = materialCount > 1 && templateCount > 1;
         let stackId = await fillRequiredFields(page, usable);
         check('AUTO assigns a stack ID', /^[0-9A-HJKMNP-TV-Z]{5}$/.test(stackId), stackId);

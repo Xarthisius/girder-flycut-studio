@@ -48,16 +48,11 @@ nodes = render(saved, true);
 assert(nodes['#buildConfigBtn'].disabled && nodes['#generateBtn'].disabled && nodes['#savedConfigs'].disabled);
 console.log('Workflow states passed: new, saved, generated, registered, busy.');
 
-const leaveExpression = source.split('const canLeave = () => ')[1].split(';')[0];
-function checkLeave(changed, answer) {
-    let asked = 0;
-    const result = new Function('dirty', 'confirm', 'return ' + leaveExpression)(() => changed, () => { asked++; return answer; });
-    return { result, asked };
-}
-assert.deepEqual(checkLeave(false, false), { result: true, asked: 0 });
-assert.deepEqual(checkLeave(true, false), { result: false, asked: 1 });
-assert.deepEqual(checkLeave(true, true), { result: true, asked: 1 });
-console.log('Unsaved-change guard passed: clean, cancel, and discard.');
+// The unsaved-change guard used to be checked here by slicing canLeave() out of
+// main.js and eval'ing it with stubs. C5 made it asynchronous and the slice
+// broke -- the fourth time those boundaries have broken. It is covered against
+// a real page by test/browser/verify.cjs now: clean leaves silently, cancel
+// stays, accept leaves.
 
 nodes = render({ ...generated, status: 'registered', registration: { igsn: 'JHAMAB00010-00001' } });
 assert(!nodes['#viewIgsnLink'].classes.has('hidden'));

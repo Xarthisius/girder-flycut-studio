@@ -84,10 +84,10 @@ effort. Each issue names the phase that closes it.
 | C2 | Major | 4 | Markup is a JSON-encoded string constant |
 | C3 | Major | 4 | Styles are a JSON-encoded string constant |
 | C4 | Critical | 4 | `app.js` is a module-global singleton and cannot be instantiated twice |
-| C5 | Minor | 4 | Three `no-alert` violations |
+| C5 | Minor | ~~4~~ ✓ | Three `no-alert` violations |
 | C6 | Minor | 6 | No plugin config page |
 | C7 | Minor | ~~3~~ ✓ | Dead and cross-file-coupled functions in `app.js` |
-| D1 | Major | ~~3~~ partial | JavaScript tests extract functions by string-slicing the source |
+| D1 | Major | ~~3~~ 3 left | JavaScript tests extract functions by string-slicing the source |
 | D2 | Major | ~~6~~ ✓ | No end-to-end browser test |
 | D3 | Minor | 0 | No coverage measurement |
 | E1 | Critical | 0 | A test-only endpoint is exposed in the production API |
@@ -274,7 +274,16 @@ Same shape as C2: `style.textContent = "…"`. No Stylus, no `stylelint`, no sha
 `variables.styl`.
 
 #### C5 — Three `no-alert` violations
-**Minor · Phase 4**
+**Minor · ~~Phase 4~~ → closed in 4c**
+
+*Done.* `canLeave()` returns a promise over `girder.dialog.confirm` now, and the
+capture-phase navigation guard — which could not decide inside the event once asking
+became asynchronous — stops every link while the form is dirty and re-issues the click
+once the answer arrives.
+
+The browser harness was extended to cover accepting the prompt *before* the change, since
+that was the half most likely to break and nothing asserted it. The same three checks pass
+across the conversion, reporting `girder modal` where they reported `native confirm`.
 
 The unsaved-changes guard and the delete-files confirmation in `client_wrapper.js`, plus one
 inherited from `app.js`. Conventions §7 wants `girder.dialog.confirm`. Note that the browser
