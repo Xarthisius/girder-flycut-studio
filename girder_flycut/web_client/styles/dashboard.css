@@ -2,6 +2,15 @@
    the shadow root is gone, so every rule is rooted under one plugin class to
    keep it away from Girder core. Prettified in the same pass -- it arrived
    minified and had never been readable. */
+/* Bootstrap 3 sets `input[type="file"] { display: block }`, which outranks the
+   user-agent rule the `hidden` attribute relies on. Inside the shadow root that
+   never reached us; in the light DOM it makes the hidden JSON and Excel file
+   inputs render as stray "Choose File" controls. Restore the attribute's
+   meaning for everything under the dashboard. */
+.g-flycut-dashboard [hidden] {
+  display: none !important;
+}
+
 .g-flycut-dashboard {
   --ink: #16221f;
   --muted: #66736f;

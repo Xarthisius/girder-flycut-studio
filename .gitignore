@@ -30,3 +30,6 @@ htmlcov/
 # Generated browser sources and the built bundle
 girder_flycut/web_client/generated/
 girder_flycut/web_client/dist/
+
+# Browser harness artefacts
+test/browser/screenshots/

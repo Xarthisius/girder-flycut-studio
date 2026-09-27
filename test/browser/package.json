@@ -1,0 +1,12 @@
+{
+  "name": "girder-flycut-browser-test",
+  "version": "0.0.0",
+  "private": true,
+  "description": "End-to-end browser verification for Flyer Studio",
+  "scripts": {
+    "verify": "node verify.cjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

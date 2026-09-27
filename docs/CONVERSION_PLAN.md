@@ -88,7 +88,7 @@ effort. Each issue names the phase that closes it.
 | C6 | Minor | 6 | No plugin config page |
 | C7 | Minor | ~~3~~ ✓ | Dead and cross-file-coupled functions in `app.js` |
 | D1 | Major | ~~3~~ partial | JavaScript tests extract functions by string-slicing the source |
-| D2 | Major | 6 | No end-to-end browser test |
+| D2 | Major | ~~6~~ ✓ | No end-to-end browser test |
 | D3 | Minor | 0 | No coverage measurement |
 | E1 | Critical | 0 | A test-only endpoint is exposed in the production API |
 | E2 | Critical | 0 | The stack mutex has no expiry, so a crash wedges a stack forever |
@@ -327,7 +327,23 @@ the coupling is to file layout rather than to a module boundary.
 `require()` and the assertions stay as they are.
 
 #### D2 — No end-to-end browser test
-**Major · Phase 6**
+**Major · ~~Phase 6~~ → done before Phase 4c**
+
+*Pulled forward.* Phase 4c restructures 932 lines of UI and 173 of markup, and nothing
+in the suite rendered any of it. Building the harness against the current, known-good UI
+had to come first, or the decomposition would have been unverifiable.
+
+It earned its place immediately: the first screenshot showed a stray "Choose File"
+control in the builder's top bar. Dropping the shadow root in Phase 4b let Girder's
+Bootstrap reach the dashboard, and `input[type="file"] { display: block }` outranks the
+user-agent rule behind the `hidden` attribute — so two file inputs that are meant to be
+invisible were rendering. Neither lint nor any existing test could have seen it. Fixed,
+and the harness now fails if anything marked `[hidden]` is rendered.
+
+It drives the full lifecycle — submit, generate, register — rather than stopping at the
+screens, because those buttons live in the shell's closure and are exactly what Phase 4c
+moves. A run mints a real stack IGSN against the local allocator and leaves the stack ID
+spent; the next run asserts it is locked and that AUTO picks the next free one.
 
 `DEVELOPMENT.md` calls the existing browser harness "supplementary, not a deployed-portal test".
 girder-dashboards runs ~62 checks against a live instance in CI and caught two defects that way that
