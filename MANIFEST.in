@@ -2,6 +2,7 @@ include README.md
 recursive-include girder_flycut *.py *.json *.css *.html *.lbrn2
 prune girder_flycut/web_client
 include girder_flycut/web_client/dist/girder-plugin-flycut.umd.cjs
+include girder_flycut/web_client/dist/style.css
 recursive-include tests *.py *.cjs *.mjs
 
 recursive-include docs *.md

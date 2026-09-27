@@ -54,9 +54,23 @@ console.log('View defines render, startBuilder and destroy.');
 //
 // What matters is that the payloads reached the artifact at all: an empty
 // stylesheet or template would still parse and still register.
-assert.ok(bundle.includes(':host'),
-    'the stylesheet must be in the bundle, retargeted at the shadow root');
 assert.ok(bundle.includes('workflowHome'),
     'the workflow markup must be in the bundle');
-assert.ok(bundle.length > 50000, `bundle looks truncated at ${bundle.length} bytes`);
-console.log('Stylesheet and workflow markup are present in the bundle.');
+assert.ok(bundle.length > 40000, `bundle looks truncated at ${bundle.length} bytes`);
+assert.ok(!bundle.includes('attachShadow'),
+    'Decision 1 dropped the shadow root; nothing should still be attaching one');
+
+// The stylesheet is a separate artifact now that there is no shadow root to
+// inject it into. Every rule must be under the plugin's own class, or it
+// leaks into Girder core the moment the plugin loads.
+const styles = fs.readFileSync(
+    path.join(__dirname, '../girder_flycut/web_client/dist/style.css'), 'utf8');
+assert.ok(styles.length > 10000, `style.css looks truncated at ${styles.length} bytes`);
+const unscoped = styles
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('}')
+    .map((chunk) => chunk.slice(chunk.lastIndexOf('{') === -1 ? 0 : 0).split('{')[0])
+    .map((sel) => sel.replace(/^[\s;]+/, ''))
+    .filter((sel) => sel && !sel.startsWith('@') && !sel.includes('.g-flycut-dashboard'));
+assert.deepEqual(unscoped, [], `style.css has unscoped selectors: ${unscoped.slice(0, 3)}`);
+console.log(`Markup is in the bundle; all of style.css is scoped (${styles.length} bytes).`);

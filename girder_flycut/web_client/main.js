@@ -1,15 +1,17 @@
 /**
  * Flyer Studio dashboard shell.
  *
- * The markup and the scoped stylesheet are plain files in this directory now,
- * imported as strings. They used to be sliced out of config_builder/static/ at
+ * The markup is a plain file in this directory, imported as a string. The
+ * stylesheet is imported for its side effect: Vite emits it as style.css and
+ * load() registers it, which is why it is scoped under .g-flycut-dashboard
+ * rather than relying on a shadow root. They used to be sliced out of config_builder/static/ at
  * build time by a generator full of literal substitutions; Decision 3 settled
  * that the plugin owns its sources, so the generator is gone and with it the
  * last of issues A2 and A6.
  */
 import createBuilder from './builder.js';
 import { groupedOptions, selectableConfigs } from './core/records.js';
-import styles from './styles/dashboard.css?raw';
+import './styles/dashboard.css';
 import template from './templates/dashboard.html?raw';
 
 const View = girder.views.View;
@@ -28,17 +30,16 @@ const Dashboard = View.extend({
             this.el.textContent = 'Sign in to Girder to use Flyer Studio.';
             return this;
         }
-        const host = document.createElement('div');
-        this.el.append(host);
-        const mount = host.attachShadow({ mode: 'open' });
-        const style = document.createElement('style');
-        style.textContent = styles;
-        mount.append(style);
-        const container = document.createElement('div');
-        container.innerHTML = template;
-        mount.append(container);
+        // Decision 1 dropped the shadow root. The dashboard is ordinary light DOM
+        // under one plugin-scoped class now, which is what lets Girder's own
+        // widgets compose with it -- BrowserWidget always had to be mounted
+        // outside the shadow root, and that exception becomes the normal case.
+        const mount = document.createElement('div');
+        mount.className = 'g-flycut-dashboard';
+        mount.innerHTML = template;
+        this.el.append(mount);
         this.cleanupBuilder = null;
-        this.ready = this.startBuilder(mount, currentUser).catch((error) => { container.textContent = error.message; });
+        this.ready = this.startBuilder(mount, currentUser).catch((error) => { mount.textContent = error.message; });
         return this;
     },
     startBuilder: async function (mount, currentUser) {

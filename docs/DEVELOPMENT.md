@@ -11,8 +11,9 @@ Run the commands below from the repository root.
 
 Everything lives in `girder_flycut/web_client/` now: `builder.js` for the form,
 `main.js` for the workflow shell, `core/` for logic with no DOM in it,
-`templates/dashboard.html` and `styles/dashboard.css` for the markup and stylesheet,
-which `main.js` imports as strings. Then:
+`templates/dashboard.html` for the markup, which `main.js` imports as a string, and
+`styles/dashboard.css`, which it imports for its side effect so Vite emits `style.css`.
+Then:
 
 ```sh
 npm ci          # once
@@ -24,6 +25,10 @@ npm test        # the four .cjs suites, including tests/bundle.cjs
 `npm run build` checks that `setup.py` and `package.json` agree on a version, then
 bundles with Vite into `girder_flycut/web_client/dist/`, which is not committed. CI builds
 it and the wheel ships only `dist/girder-plugin-flycut.umd.cjs`.
+
+Every rule in the stylesheet is scoped under `.g-flycut-dashboard`. There is no shadow
+root any more, so that class is the only thing keeping the dashboard's styles away from
+Girder core; `tests/bundle.cjs` fails the build if a rule escapes it.
 
 There is no source generator any more. The markup and stylesheet were derived from
 `config_builder/static/` by matching literal strings until Phase 4a; that directory is

@@ -33,10 +33,7 @@ class FlycutPlugin(GirderPlugin):
         self._guard('could not add the stack-lock TTL index', ensure_lock_expiry)
         info["apiRoot"].flycut = Flycut()
         registerPluginStaticContent(
-            # css=[] because the stylesheet is injected into the shadow root as a
-            # string rather than linked; there is no external stylesheet to
-            # register. That changes if Decision 1 drops the shadow root.
-            plugin="flycut", css=[], js=["/girder-plugin-flycut.umd.cjs"],
+            plugin="flycut", css=["/style.css"], js=["/girder-plugin-flycut.umd.cjs"],
             staticDir=Path(__file__).parent / "web_client" / "dist",
             tree=info["serverRoot"],
         )
