@@ -441,8 +441,8 @@ setting replaces 83 lines of patch.
 **Minor · Phase 6**
 
 `setup.py` carries name, version, description, packages and entry point. No `long_description`,
-classifiers, `url`, or author. There is no `LICENSE` file in the repository root, although `vendor/`
-and `patches/` each ship one.
+classifiers, `url`, or author. There is no `LICENSE` file in the repository root — the only one in
+the tree belongs to the vendored dependency under `vendor/`.
 
 **Fix** — Fill out the metadata and add the project's own licence file.
 
