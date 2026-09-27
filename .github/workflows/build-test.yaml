@@ -1,0 +1,132 @@
+name: Testing and Linting
+
+on:
+  push:
+    branches:
+      - main
+      - conversion
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Fast lane: everything that needs neither MongoDB nor the patched JSONForms
+  # checkout. This is the gate that should stay green at all times.
+  check:
+    name: Lint, build, and frontend tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install linters
+        run: python -m pip install --upgrade pip ruff
+
+      - name: Lint Python
+        run: ruff check .
+
+      # build_dashboard.py welds the static builder into the plugin bundle with
+      # literal string substitutions. Each one now asserts its match count, so a
+      # moved needle fails here instead of silently dropping a button.
+      - name: Rebuild the browser bundle
+        run: python build_dashboard.py
+
+      # The bundle is committed, so a rebuild must be a no-op. Without this,
+      # web_client/main.js can drift from the sources it is generated from and
+      # nothing notices until someone rebuilds by hand.
+      - name: Check the committed bundle is in sync
+        run: |
+          if ! git diff --exit-code -- girder_flycut/web_client/main.js; then
+            echo '::error::girder_flycut/web_client/main.js is stale.'
+            echo 'Run `python build_dashboard.py` and commit the result.'
+            exit 1
+          fi
+
+      - name: Syntax-check the bundle
+        run: node --check girder_flycut/web_client/main.js
+
+      - name: Frontend tests
+        run: |
+          node tests/status.cjs
+          node tests/workflow.cjs
+          node tests/complete_workflow.cjs
+
+  # Slow lane: the Python suite needs MongoDB and girder-jsonforms from its
+  # `igsn` branch, plus two AIMDL-hook guards that are not upstream yet. The
+  # steps below mirror docs/INSTALLATION.md exactly, so if they break here they
+  # are broken for anyone following it. Upstreaming the guards -- issue F2 in
+  # docs/CONVERSION_PLAN.md -- reduces this to a plain `pip install .`.
+  pytest:
+    name: Server tests
+    runs-on: ubuntu-24.04
+    services:
+      mongodb:
+        image: mongo:4.4
+        ports:
+          - 27017:27017
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Installed from a patched checkout rather than letting pip resolve the
+      # `git+...@igsn` reference in setup.py, because the guards in
+      # patches/ are not upstream yet. `git apply` fails loudly if a hunk has
+      # since landed upstream, which is the signal to drop it from the patch.
+      - name: Install girder-jsonforms from the igsn branch
+        run: |
+          git clone -b igsn https://github.com/Xarthisius/girder-jsonforms.git ../girder-jsonforms
+          git -C ../girder-jsonforms apply "$GITHUB_WORKSPACE/patches/girder-jsonforms-flycut.patch"
+          python -m pip install --upgrade pip
+          python -m pip install -e ../girder-jsonforms
+
+      # --no-deps matters: a plain `pip install .` would re-resolve the
+      # `girder-jsonforms @ git+...@igsn` reference from setup.py and replace
+      # the patched editable install above with an unpatched one.
+      - name: Install the plugin and its dependencies
+        run: |
+          python -m pip install ./vendor/girder-dashboards
+          python -m pip install --no-deps .
+          python -m pip install -r requirements-dev.txt
+
+      # girder-dashboards' load() md5-hashes every file it registers as static
+      # content, so its bundle has to exist before any test uses the `server`
+      # fixture. The vendored copy ships one prebuilt.
+      - name: Build the browser bundle
+        run: python build_dashboard.py
+
+      - name: Run tests with coverage
+        env:
+          GIRDER_MAX_CURSOR_TIMEOUT_MS: 60000
+        run: |
+          pytest tests --verbose \
+                 --mongo-uri mongodb://127.0.0.1:27017 \
+                 --cov=girder_flycut \
+                 --cov-report=term \
+                 --cov-report=xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 7

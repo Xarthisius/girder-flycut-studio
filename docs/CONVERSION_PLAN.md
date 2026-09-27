@@ -417,12 +417,26 @@ rather than vendoring a tree.
 #### F2 — A required dependency is not installable from any index
 **Major · Phase 6**
 
-`INSTALLATION.md` requires cloning girder-jsonforms, checking out commit `52f29b7`, and applying
-`patches/girder-jsonforms-flycut.patch`. The patch is described as required. This single fact blocks
-CI (B1), the test suite (B5), and any ordinary `pip install girder-flycut`.
+*Revised in Phase 0.* The dependency is girder-jsonforms' **`igsn` branch** — not a PyPI release,
+and not the pinned commit `52f29b7` that `INSTALLATION.md` used to name. `setup.py` now declares it
+directly: `girder-jsonforms @ git+https://github.com/Xarthisius/girder-jsonforms.git@igsn`.
 
-**Fix** — Upstream the patch, or publish a forked package under a distinct name and depend on that.
-Either way it has to become an installable requirement before CI can run the Python tests.
+The accompanying patch has shrunk. Its functional half — `create_batch()`'s `relation_type`,
+`inverse_relation_type` and `child_titles` arguments, which stack registration depends on — was
+upstreamed as [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34) and merged into
+`igsn` on 2026-09-25 as `51500a3`, in a better form: keyword-only, validated, and tested. Two
+AIMDL-hook guards remain, and both still apply cleanly to the `igsn` tip:
+
+- `handle_deposition_registration()` enqueues `register_deposition_with_aimd.delay()`, which needs a
+  broker even though the task returns early when `AIMD_PORTAL_TOKEN` is unset.
+- `propagate_to_projects()` assumes every item lives in the AIMDL collection.
+
+Flyer Studio needs both in **every** deployment, not just unusual ones: it runs inside Girder as the
+signed-in user, holds no AIMD portal token, and never contacts the AIMD portal.
+
+**Fix** — Upstream both guards the way `create_batch` went up. That deletes
+`patches/girder-jsonforms-flycut.patch`, makes the `setup.py` reference sufficient on its own, and
+reduces CI's install step to `pip install .`.
 
 #### F3 — Thin package metadata and no `LICENSE`
 **Minor · Phase 6**

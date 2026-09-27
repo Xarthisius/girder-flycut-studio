@@ -1,0 +1,42 @@
+# Lint configuration for girder-flycut-studio.
+#
+# The selected rules are the subset of girder-dashboards' ruleset that this
+# repository passes today. Two deliberate omissions, both recorded in
+# docs/CONVERSION_PLAN.md:
+#
+#   "I"  (import sorting) -- 26 findings, nearly all of them function-local
+#        imports that Phase 5 hoists to module scope. Enabling it before that
+#        would sort blocks the same phase is about to delete. See Decision 5.
+#
+#   E501 (line length) -- 253 lines exceed 100 characters, the longest at 581.
+#        Phase 5 applies whatever limit Decision 5 settles on, module by module
+#        during the rest.py split. `line-length` below only affects
+#        `ruff format` until then.
+exclude = [
+    ".eggs",
+    ".git",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "_build",
+    "build",
+    "config_builder",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "vendor",
+    "venv",
+]
+
+line-length = 120
+indent-width = 4
+
+target-version = "py310"
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"

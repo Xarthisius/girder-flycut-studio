@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 import pytest
 from girder.models.folder import Folder
@@ -82,7 +83,6 @@ def test_registration_uses_model_and_is_idempotent(server, enabled, user, fsAsse
     from girder_jsonforms.models.deposition import Deposition
     from girder_jsonforms.settings import PluginSettings
     from girder.models.setting import Setting
-    from girder.constants import AccessType
     # Local mode only: no external registry calls in tests.
     monkeypatch.setattr('girder_jsonforms.models.deposition.get_client', lambda: None)
     Setting().set(PluginSettings.IGSN_PREFIX, '10.12345')
@@ -111,7 +111,7 @@ def test_registration_uses_model_and_is_idempotent(server, enabled, user, fsAsse
 def test_register_requires_parent_write(server, enabled, user, admin, fsAssetstore, monkeypatch):
     from girder_jsonforms.models.deposition import Deposition
     monkeypatch.setattr('girder_jsonforms.models.deposition.get_client', lambda: None)
-    parent = Deposition().create_deposition(
+    Deposition().create_deposition(
         {'titles': [{'title': 'Restricted foil'}], 'creators': [{'name': 'Admin'}],
          'publisher': {'name': 'Lab'}, 'publicationYear': '2026', 'relatedIdentifiers': [], 'alternateIdentifiers': [{'alternateIdentifier': 'foilIGSN', 'alternateIdentifierType': 'Local'}]},
         creator=admin, igsn='JHAMAB00010', public=True)
@@ -160,14 +160,11 @@ def test_draft_save_update_submit_and_immutability(server, enabled, user):
 
 def test_portal_template_and_timestamped_draft(server, enabled, user, admin, fsAssetstore):
     import io
-    from pathlib import Path
     from girder.models.upload import Upload
     from girder_flycut.generate import generate
     from girder_flycut.validation import normalize_config
     from test_dashboard import CATALOG
-    import xml.etree.ElementTree as ET
     folder = Folder().createFolder(user, 'Portal templates', parentType='user', creator=user, public=False)
-    source = Path(__file__).parents[1] / 'girder_flycut/inputs/templates/5x5-stack.lbrn2'
     original = normalize_config(configuration(), user, CATALOG)
     data = generate(original)['stack00005-layout.lbrn2'][0]
     file = Upload().uploadFromFile(io.BytesIO(data), len(data), 'proxy.lbrn2', parentType='folder', parent=folder, user=user)
@@ -213,7 +210,10 @@ def test_duplicate_stack_warning_and_timestamp_order(server, enabled, user):
     draft = server.request('/flycut/config', method='POST', user=user, params={'config': json.dumps(config)})
     assertStatusOk(draft)
     assert server.request('/flycut/config', user=user).json[0]['_id'] == draft.json['_id']
-    other = server.request('/flycut/config', method='POST', user=user, params={'config': json.dumps(config)})
+    # A second, newer draft, so the assertion below proves the update bumped
+    # `draft` back to the top of the newest-first list rather than passing by
+    # default. The response itself is not inspected.
+    server.request('/flycut/config', method='POST', user=user, params={'config': json.dumps(config)})
     update = server.request('/flycut/config', method='POST', user=user,
         params={'id': draft.json['_id'], 'config': json.dumps(config)})
     assertStatusOk(update)
@@ -247,6 +247,25 @@ def test_delete_draft_only_owner_and_never_submitted(server, enabled, user):
     assert Item().load(submitted['_id'], force=True)['meta']['flycut']['status'] == 'submitted'
 
 
+def mock_registration(config_id, user, stack):
+    """Drive a generated configuration to `registered` without an IGSN registry.
+
+    This was once POST /flycut/config/:id/mock-register, an @access.user route
+    shipped in the production API -- so any user with dashboard access could
+    mark any stack registered under a fabricated identifier. The lifecycle
+    consequences it sets up, a locked stack ID and undeletable files, are what
+    the test below is actually about, so it lives here instead.
+    """
+    item = Item().load(config_id, force=True, exc=True)
+    now = datetime.now(timezone.utc).isoformat()
+    receipt = {'mock': True, 'igsn': 'MOCK-' + stack, 'registeredAt': now,
+               'registeredBy': str(user['_id'])}
+    Item().collection.update_one({'_id': item['_id']}, {'$set': {
+        'meta.flycut.status': 'registered', 'meta.flycut.registration': receipt,
+        'meta.flycut.registeredAt': now}})
+    return receipt
+
+
 def test_lifecycle_replacement_files_and_mock_registration(server, enabled, user, fsAssetstore):
     config = configuration()
     config['custom_fields']['glass_bl_mm'] = None
@@ -270,13 +289,15 @@ def test_lifecycle_replacement_files_and_mock_registration(server, enabled, user
         assert File().load(artifact['_id'], force=True) is None
     assertStatusOk(server.request('/flycut/config', method='POST', user=user, params=params))
     assertStatusOk(server.request(endpoint + '/generate', method='POST', user=user))
-    registered = server.request(endpoint + '/mock-register', method='POST', user=user)
-    assertStatusOk(registered)
-    assert registered.json['status'] == 'registered'
-    assert registered.json['registration']['mock'] is True
+    receipt = mock_registration(first['_id'], user, stack='00005')
+    listed = next(r for r in server.request('/flycut/config', user=user).json if r['_id'] == first['_id'])
+    # Still routed through lifecycle() and serialize(), so the production
+    # generated -> registered transition is what is being asserted here.
+    assert listed['status'] == 'registered'
+    assert listed['registration'] == receipt
+    assert listed['registration']['mock'] is True
     assertStatus(server.request('/flycut/config', method='POST', user=user, params=params), 409)
     assertStatus(server.request(endpoint + '/files', method='DELETE', user=user), 409)
-    assert server.request(endpoint + '/mock-register', method='POST', user=user).json['registration'] == registered.json['registration']
 
 
 def test_presets_disabled_preserve_explicit_fields(server, enabled, user):
@@ -535,7 +556,8 @@ def test_canonical_config_and_history(server, enabled, user):
 
 @pytest.mark.plugin('jsonforms')
 def test_excel_input_links(server, enabled, user):
-    import io, base64
+    import base64
+    import io
     from openpyxl import Workbook
     from girder.models.file import File
     from girder_jsonforms.models.deposition import Deposition

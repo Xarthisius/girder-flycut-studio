@@ -1,3 +1,29 @@
+AIMDL-hook guards for girder-jsonforms, against the `igsn` branch.
+
+The functional half of this patch -- create_batch()'s relation_type,
+inverse_relation_type and child_titles arguments, which Flyer Studio uses to
+register each stack as a child of its foil -- was upstreamed as PR #34
+("Allow custom relationships and titles in create_batch") and merged into
+`igsn` on 2026-09-25 as 51500a3. It is no longer carried here, and the version
+that landed is better: the new arguments are keyword-only, validated, and
+covered by tests.
+
+What remains are two guards that Flyer Studio needs in every deployment. It
+runs inside Girder as the signed-in user, has no AIMD portal token, and never
+talks to the AIMD portal -- but girder-jsonforms fires two AIMDL hooks on the
+registration path regardless. Neither guard is upstream yet; both apply cleanly
+to the `igsn` tip and both belong there rather than here.
+
+  1. girder_jsonforms/__init__.py -- handle_deposition_registration() calls
+     register_deposition_with_aimd.delay(), and .delay() needs a broker even
+     though the task itself returns early when AIMD_PORTAL_TOKEN is unset. The
+     guard moves that check ahead of the enqueue.
+
+  2. girder_jsonforms/rest/aimdl.py -- propagate_to_projects() assumes every
+     item belongs to the AIMDL collection. Items in a user's personal workspace
+     cannot, so tagging one with an IGSN should not require an AIMDL
+     deployment.
+
 diff --git a/girder_jsonforms/__init__.py b/girder_jsonforms/__init__.py
 index 13546ae..a08924d 100644
 --- a/girder_jsonforms/__init__.py
@@ -14,58 +40,6 @@ index 13546ae..a08924d 100644
      ids = event.info.get("ids", [])
      if not ids:
          return
-diff --git a/girder_jsonforms/models/deposition.py b/girder_jsonforms/models/deposition.py
-index c6ad942..d888750 100644
---- a/girder_jsonforms/models/deposition.py
-+++ b/girder_jsonforms/models/deposition.py
-@@ -727,7 +727,9 @@ class Deposition(AccessControlledModel):
-                     return alt_id.get("alternateIdentifier")
-         return None
- 
--    def create_batch(self, main_deposition, indices, already_registered=False):
-+    def create_batch(self, main_deposition, indices, already_registered=False,
-+                     relation_type="IsPartOf", inverse_relation_type="HasPart",
-+                     child_titles=None):
-         # Register the children centrally first. If the registry rejects the
-         # batch (a duplicate index, an unknown parent) nothing is written
-         # locally either -- otherwise Girder would be left holding children the
-@@ -759,7 +761,7 @@ class Deposition(AccessControlledModel):
-             }
- 
-         relatedIdentifier = {
--            "relationType": "IsPartOf",
-+            "relationType": relation_type,
-             "relatedIdentifier": main_deposition["igsn"],
-             "relatedIdentifierType": "IGSN",
-         }
-@@ -774,7 +776,7 @@ class Deposition(AccessControlledModel):
-             metadata["relatedIdentifiers"] = [
-                 relatedIdentifier
-                 for relatedIdentifier in relatedIdentifiers
--                if relatedIdentifier["relationType"] != "HasPart"
-+                if relatedIdentifier["relationType"] not in {"HasPart", inverse_relation_type}
-             ]
-             metadata.pop("url", None)
-             metadata.pop("doi", None)
-@@ -786,7 +788,8 @@ class Deposition(AccessControlledModel):
-             )
-             child_igsn = f"{main_deposition['igsn']}-{igsn_index}"
-             child_metadata = {
--                "titles": [{"title": f"{titles[0]['title']} - {igsn_index}"}],
-+                "titles": [{"title": (child_titles or {}).get(
-+                    igsn_index, f"{titles[0]['title']} - {igsn_index}")}],
-                 "doi": f"{igsn_prefix}/{child_igsn}",
-                 **metadata.copy(),
-             }
-@@ -850,7 +853,7 @@ class Deposition(AccessControlledModel):
-         # HasPart for the main deposition
-         has_parts = [
-             {
--                "relationType": "HasPart",
-+                "relationType": inverse_relation_type,
-                 "relatedIdentifier": _["igsn"],
-                 "relatedIdentifierType": "IGSN",
-             }
 diff --git a/girder_jsonforms/rest/aimdl.py b/girder_jsonforms/rest/aimdl.py
 index 01f98b3..18b5ec3 100644
 --- a/girder_jsonforms/rest/aimdl.py

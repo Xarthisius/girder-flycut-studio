@@ -20,15 +20,19 @@ node tests/workflow.cjs
 node tests/complete_workflow.cjs
 ```
 
-Commit the generated `girder_flycut/web_client/main.js` with the source changes.
+Commit the generated `girder_flycut/web_client/main.js` with the source changes; CI
+rebuilds and fails if it is stale. Each substitution in `build_dashboard.py` asserts how
+many times its needle matches, so markup that moves in `config_builder/static/` breaks the
+build instead of quietly dropping a control.
 This build does not need npm or the original Flyer-Cut-Opt repository. The vendored
 dashboards frontend is prebuilt; rebuild it with its own package scripts if changed.
 
 ## Backend tests and packaging
 
 ```sh
-python -m pip install pytest pytest-girder
-pytest tests --mongo-uri mongodb://127.0.0.1:27017 -q
+python -m pip install -r requirements-dev.txt
+ruff check .
+pytest tests --mongo-uri mongodb://127.0.0.1:27017 -q --cov=girder_flycut --cov-report=term
 python -m pip wheel --no-deps . --wheel-dir dist
 ```
 
@@ -62,3 +66,11 @@ Generation is synchronous. Request limits bound imported workbooks and templates
 Version 1.0.0 is the source/plugin release, not a packaged Girder deployment.
 Public publishing of IGSNs depends on separately configured JSONForms services.
 No migration of historical output files is performed automatically.
+
+## Continuous integration
+
+`.github/workflows/build-test.yaml` runs two jobs. **check** is the fast gate: `ruff`,
+a bundle rebuild, a staleness diff against the committed bundle, `node --check`, and the
+three frontend suites. **pytest** needs MongoDB and reproduces `INSTALLATION.md`'s
+clone-and-patch of girder-jsonforms, because that dependency is not installable from an
+index; `docs/CONVERSION_PLAN.md` tracks that as issue F2 and Phase 6 removes it.

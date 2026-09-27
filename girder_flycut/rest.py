@@ -38,6 +38,32 @@ from .artifacts import configuration, CONFIG_QUERY, save_config_file, associatio
 CATALOG = json.loads((Path(__file__).parent / 'catalog.json').read_text())
 
 
+# How long a stack may stay locked before Mongo reclaims it. Generation is
+# synchronous, so a legitimate operation finishes far inside this; the window
+# only has to be wider than the slowest honest request.
+STACK_LOCK_TTL_SECONDS = 900
+
+LOCK_COLLECTION = 'flycut_stack_locks'
+
+
+def stack_locks():
+    """The stack mutex collection."""
+    return Item().collection.database[LOCK_COLLECTION]
+
+
+def ensure_lock_expiry():
+    """Give the stack mutex a TTL so a crashed worker cannot wedge a stack.
+
+    Without this, a process that dies between insert_one and delete_one leaves
+    the lock document behind and every later request for that stack ID answers
+    409 forever, with no operator-visible way to clear it.
+
+    Documents written before this index existed carry no `acquired` field and
+    are therefore never expired by it -- drop them by hand if any are stuck.
+    """
+    stack_locks().create_index('acquired', expireAfterSeconds=STACK_LOCK_TTL_SECONDS)
+
+
 def stack_locked(method):
     @wraps(method)
     def wrapped(self, *args, **kwargs):
@@ -49,9 +75,9 @@ def stack_locked(method):
             identifier = kwargs.get('id', args[0] if args else '')
             raw = configuration(self.config_item(identifier, self.gate()))
         stack = str(unpack(raw).get('run_params', {}).get('stackid', '')).strip().upper()
-        locks = Item().collection.database['flycut_stack_locks']
+        locks = stack_locks()
         try:
-            locks.insert_one({'_id': stack})
+            locks.insert_one({'_id': stack, 'acquired': datetime.now(timezone.utc)})
         except DuplicateKeyError:
             raise RestException('This stack is being changed. Try again when that operation finishes.', code=409)
         try:
@@ -81,7 +107,6 @@ class Flycut(Resource):
         self.route('DELETE', ('config', ':id'), self.delete_draft)
         self.route('POST', ('config', ':id', 'generate'), self.generate_config)
         self.route('POST', ('config', ':id', 'register'), self.register_config)
-        self.route('POST', ('config', ':id', 'mock-register'), self.mock_register)
         self.route('DELETE', ('config', ':id', 'files'), self.delete_files)
 
     def gate(self):
@@ -487,27 +512,6 @@ class Flycut(Resource):
                         Item().remove(artifact_item)
         Item().collection.update_one({'_id': item['_id']}, {'$set': {'meta.flycut.status': 'submitted', 'meta.flycut.overwriteSafe': False},
             '$unset': {'meta.flycut.files': '', 'meta.flycut.folderId': '', 'meta.flycut.generatedAt': ''}})
-        return self.serialize(self.config_item(id, user))
-
-    @access.user
-    @autoDescribeRoute(Description('Mock registration only; never contacts an IGSN registry.').param('id', 'Configuration ID', paramType='path'))
-    @stack_locked
-    def mock_register(self, id):
-        user = self.gate()
-        item = self.config_item(id, user)
-        status = self.lifecycle(item)
-        if status == 'registered':
-            return self.serialize(item)
-        if status != 'generated':
-            raise RestException('Generate files before mock registration.', code=409)
-        from bson import ObjectId
-        if not all(File().findOne({'_id': ObjectId(file['_id'])}) for file in item['meta']['flycut'].get('files', [])):
-            raise RestException('Some generated files are missing. Delete the remaining files and regenerate.', code=409)
-        stack = unpack(configuration(item))['run_params']['stackid']
-        now = datetime.now(timezone.utc).isoformat()
-        receipt = {'mock': True, 'igsn': 'MOCK-' + stack, 'registeredAt': now, 'registeredBy': str(user['_id'])}
-        Item().collection.update_one({'_id': item['_id']}, {'$set': {'meta.flycut.status': 'registered',
-            'meta.flycut.registration': receipt, 'meta.flycut.registeredAt': now}})
         return self.serialize(self.config_item(id, user))
 
     @access.user
