@@ -1,7 +1,10 @@
 /**
  * Flyer Studio dashboard shell.
  *
- * The markup is a plain file in this directory, imported as a string. The
+ * The markup is one plain file per screen in ./templates/, imported as
+ * strings and concatenated here. They were a single file until the screens
+ * became views; splitting first means C2 translates each fragment to Pug
+ * rather than translating one file and immediately re-splitting it. The
  * stylesheet is imported for its side effect: Vite emits it as style.css and
  * load() registers it, which is why it is scoped under .g-flycut-dashboard
  * rather than relying on a shadow root. They used to be sliced out of config_builder/static/ at
@@ -13,8 +16,21 @@ import createBuilder from './builder.js';
 import { groupedOptions, selectableConfigs } from './core/records.js';
 import { workflowState } from './core/workflow.js';
 import './styles/dashboard.css';
-import template from './templates/dashboard.html?raw';
+import adminSettings from './templates/adminSettings.html?raw';
+import builder from './templates/builder.html?raw';
+import configurationPicker from './templates/configurationPicker.html?raw';
+import lightburnPicker from './templates/lightburnPicker.html?raw';
+import registrationPicker from './templates/registrationPicker.html?raw';
+import statusBar from './templates/statusBar.html?raw';
+import topbar from './templates/topbar.html?raw';
+import workflowHome from './templates/workflowHome.html?raw';
 
+// Screen order is DOM order, and the builder queries the whole mount at
+// construction, so every screen has to be present before createBuilder runs.
+const SCREENS = [
+    topbar, workflowHome, configurationPicker, lightburnPicker,
+    registrationPicker, statusBar, adminSettings, builder
+];
 const $$ = girder.$;
 const View = girder.views.View;
 const request = async (url, method = 'GET', data) => {
@@ -38,7 +54,7 @@ const Dashboard = View.extend({
         // outside the shadow root, and that exception becomes the normal case.
         const mount = document.createElement('div');
         mount.className = 'g-flycut-dashboard';
-        mount.innerHTML = template;
+        mount.innerHTML = SCREENS.join('');
         this.el.append(mount);
         this.cleanupBuilder = null;
         this.ready = this.startBuilder(mount, currentUser).catch((error) => { mount.textContent = error.message; });
