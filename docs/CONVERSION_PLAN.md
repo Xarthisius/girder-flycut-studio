@@ -235,7 +235,18 @@ running it, neither previously written down: JSONForms' frontend must be built, 
 ### C · Web-client conventions
 
 #### C4 — `app.js` is a module-global singleton and cannot be instantiated twice
-**Critical · Phase 4**
+**Critical · ~~Phase 4~~ → the singleton half closed in Phase 3**
+
+*Revised in 4c.* The headline is already fixed: Phase 3 wrapped the builder in
+`createBuilder()`, so `state`, `draggedLaserId`, `activeHelp` and the twenty-five
+listeners are per-call rather than per-module. Nothing in `builder.js` is module-level any
+more.
+
+What remains is not instantiability but shape: the state is plain objects in a closure
+rather than Backbone models that views can listen to. That matters for C1, not for C4, and
+lands with the views — a collection nothing listens to yet would be a wrapper, not a
+model. The rules a `LaserCollection` would enforce are extracted and unit-tested in
+`core/laser.js` in the meantime.
 
 It holds module-level `state`, `draggedLaserId`, `activeHelp` and `acknowledgedSnapshot`, and
 registers twenty-five `addEventListener` calls at top level during script evaluation. It only works

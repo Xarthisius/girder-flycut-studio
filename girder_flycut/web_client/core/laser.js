@@ -19,3 +19,67 @@ export function restoreImportedLaser(laser) {
     laser.enabled = true;
     laser.locked = true;
 }
+
+/** At most this many laser entries; the form refuses to add more. */
+export const LASER_LIMIT = 28;
+
+/** Entries are named for their position, so any reorder renames all of them. */
+export function normalizeLayerNames(lasers) {
+    lasers.forEach((laser, index) => { laser.name = `F${index + 1}`; });
+    return lasers;
+}
+
+/**
+ * Move one entry next to another, renaming to match the new order.
+ * A preset wins over the material, which is why both are passed in.
+ */
+export function moveLaser(lasers, sourceId, targetId, placeAfter = false) {
+    if (!sourceId || !targetId || sourceId === targetId) return lasers;
+    const sourceIndex = lasers.findIndex((laser) => laser.id === sourceId);
+    if (sourceIndex < 0) return lasers;
+    const [moved] = lasers.splice(sourceIndex, 1);
+    const targetIndex = lasers.findIndex((laser) => laser.id === targetId);
+    lasers.splice(targetIndex + (placeAfter ? 1 : 0), 0, moved);
+    return normalizeLayerNames(lasers);
+}
+
+/** Apply a preset's or a material's defaults to entries still marked DEFAULT. */
+export function applyMaterialDefaults(lasers, material, preset) {
+    const defaulted = lasers.filter((laser) => laser.isDefault);
+    if (preset) {
+        defaulted.forEach((laser) => Object.assign(laser, preset.laser_defaults));
+        return lasers;
+    }
+    const defaults = material?.laser_defaults;
+    if (!defaults) return lasers;
+    defaulted.forEach((laser) => {
+        laser.power = defaults.maxPower ?? laser.power;
+        laser.speed = defaults.speed ?? laser.speed;
+        laser.qpulsewidth = defaults.QPulseWidth ?? laser.qpulsewidth;
+        laser.frequency = defaults.frequency ?? laser.frequency;
+        laser.passes = defaults.numPasses ?? laser.passes;
+    });
+    return lasers;
+}
+
+/** How many entries a template of `layerCount` layers actually consumes. */
+export function usedLaserCount(lasers, layerCount, repeat) {
+    if (layerCount === null) return null;
+    return Math.min(lasers.length, Math.ceil(layerCount / Math.max(1, repeat || 1)));
+}
+
+/**
+ * Which entry drives a given template layer.
+ *
+ * `augmented` means the entry is standing in for a layer it is not named
+ * after, which the preview marks with an asterisk.
+ */
+export function resolveLaserForLayer(lasers, layerIndex, { repeat, wraparound }) {
+    const total = lasers.length;
+    if (!total) return { laser: null, augmented: false };
+    let laserIndex = Math.floor(layerIndex / Math.max(1, repeat || 1));
+    if (wraparound) laserIndex %= total;
+    const setting = lasers[laserIndex];
+    const laser = setting?.enabled !== false ? setting || null : null;
+    return { laser, augmented: Boolean(laser && laser.name !== `F${layerIndex + 1}`) };
+}
