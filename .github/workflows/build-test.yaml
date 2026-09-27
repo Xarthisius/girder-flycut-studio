@@ -1,0 +1,148 @@
+name: Testing and Linting
+
+on:
+  push:
+    branches:
+      - main
+      - conversion
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Fast lane: everything that needs neither MongoDB nor the patched JSONForms
+  # checkout. This is the gate that should stay green at all times.
+  check:
+    name: Lint, build, and frontend tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install linters
+        run: python -m pip install --upgrade pip ruff
+
+      - name: Lint Python
+        run: ruff check .
+
+      # build_dashboard.py welds the static builder into the plugin bundle with
+      # literal string substitutions. Each one now asserts its match count, so a
+      # moved needle fails here instead of silently dropping a button.
+      - name: Rebuild the browser bundle
+        run: python build_dashboard.py
+
+      # The bundle is committed, so a rebuild must be a no-op. Without this,
+      # web_client/main.js can drift from the sources it is generated from and
+      # nothing notices until someone rebuilds by hand.
+      - name: Check the committed bundle is in sync
+        run: |
+          if ! git diff --exit-code -- girder_flycut/web_client/main.js; then
+            echo '::error::girder_flycut/web_client/main.js is stale.'
+            echo 'Run `python build_dashboard.py` and commit the result.'
+            exit 1
+          fi
+
+      - name: Syntax-check the bundle
+        run: node --check girder_flycut/web_client/main.js
+
+      - name: Frontend tests
+        run: |
+          node tests/status.cjs
+          node tests/workflow.cjs
+          node tests/complete_workflow.cjs
+
+  # Slow lane: the Python suite. Mirrors girder-jsonforms' own workflow, which
+  # is the reference for how this dependency has to be set up.
+  pytest:
+    name: Server tests
+    runs-on: ubuntu-24.04
+    services:
+      mongodb:
+        image: mongo:4.4
+        ports:
+          - 27017:27017
+      # girder-jsonforms takes a Redis lock while ensuring its projects
+      # collection at load time. It logs and proceeds when Redis is missing,
+      # but its own CI runs one, so match that rather than relying on the
+      # fallback path. Note there is deliberately no message broker here --
+      # see the eagerWorkerTasks note in tests/test_api.py.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # girder-jsonforms' load() registers static content and md5-hashes every
+      # file, so its frontend must be built before any test touches the server
+      # fixture -- and a pip install from git cannot build it, because the
+      # package ships only prebuilt assets that a git checkout does not carry.
+      # This is why the dependency is installed from a checkout rather than by
+      # letting pip resolve the reference in setup.py.
+      - name: Install girder-jsonforms from the igsn branch
+        run: |
+          git clone -b igsn https://github.com/Xarthisius/girder-jsonforms.git ../girder-jsonforms
+          cd ../girder-jsonforms/girder_jsonforms/web_client
+          npm ci
+          npm run build
+          cd "$GITHUB_WORKSPACE"
+          python -m pip install --upgrade pip
+          python -m pip install -e ../girder-jsonforms
+
+      # --no-deps: a plain `pip install .` re-resolves the
+      # `girder-jsonforms @ git+...@igsn` reference and would replace the built
+      # editable install above with an unbuilt one from git.
+      #
+      # -e: without it the tests import the copy in site-packages while
+      # --cov=girder_flycut measures the working tree, so coverage reports 0%
+      # on a fully passing run. Editable makes them the same files.
+      - name: Install the plugin and its dependencies
+        run: |
+          python -m pip install ./vendor/girder-dashboards
+          python -m pip install --no-deps -e .
+          python -m pip install -r requirements-dev.txt
+
+      # girder-dashboards' load() md5-hashes every file it registers as static
+      # content, so its bundle has to exist before any test uses the `server`
+      # fixture. The vendored copy ships one prebuilt.
+      - name: Build the browser bundle
+        run: python build_dashboard.py
+
+      - name: Run tests with coverage
+        env:
+          GIRDER_MAX_CURSOR_TIMEOUT_MS: 60000
+        run: |
+          pytest tests --verbose \
+                 --mongo-uri mongodb://127.0.0.1:27017 \
+                 --cov=girder_flycut \
+                 --cov-report=term \
+                 --cov-report=xml \
+                 --cov-fail-under=80
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 7

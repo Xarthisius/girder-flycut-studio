@@ -1,0 +1,9 @@
+# Development and CI dependencies. The runtime dependencies live in setup.py;
+# requirements.txt installs the vendored dashboards plugin plus this package.
+pytest
+pytest-girder
+pytest-cov
+ruff
+# Used by the Excel input tests. Normally pulled in by girder-jsonforms, listed
+# here so the suite does not depend on that transitively.
+openpyxl
