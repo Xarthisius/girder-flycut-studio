@@ -125,6 +125,7 @@ async function reopen(page, base, id) {
     // The unsaved-changes guard uses a native confirm() today and a Girder modal
     // after C5. Accept either, so this check survives that change.
     let nativeDialogs = 0;
+    let acceptNextPrompt = false;
     page.on('dialog', async (dialog) => {
         // beforeunload has to be accepted or the navigation that triggered it is
         // cancelled -- dismissing one means "stay on this page". Only the
@@ -134,8 +135,35 @@ async function reopen(page, base, id) {
             return;
         }
         nativeDialogs++;
+        if (acceptNextPrompt) {
+            await dialog.accept();
+            return;
+        }
         await dialog.dismiss();
     });
+
+    /**
+     * Click something that may trip the unsaved-changes guard, and answer
+     * whichever kind of prompt it raises.
+     *
+     * Arming has to happen before the click: a native confirm() is dispatched
+     * synchronously from inside the click handler, so a flag set afterwards is
+     * already too late. A Girder modal is the opposite -- still on screen when
+     * the click returns, and answered with a button press.
+     */
+    async function clickThroughGuard(page, selector, accept) {
+        acceptNextPrompt = accept;
+        await page.click(selector);
+        await page.waitForTimeout(600);
+        const modal = page.locator('#g-dialog-container .modal-dialog');
+        const wasModal = await modal.isVisible().catch(() => false);
+        if (wasModal) {
+            await page.click(accept ? '#g-confirm-button' : '#g-dialog-container .btn-default');
+            await page.waitForTimeout(600);
+        }
+        acceptNextPrompt = false;
+        return wasModal;
+    }
 
     try {
         // ---- gallery ----------------------------------------------------
@@ -249,19 +277,29 @@ async function reopen(page, base, id) {
         // ---- the unsaved-changes guard ----------------------------------
         // The riskiest thing C5 touches: canLeave() is synchronous today and one
         // of its callers is a capture-phase click handler.
-        const dialogsBefore = nativeDialogs;
+        let dialogsBefore = nativeDialogs;
         await page.fill('#operator', 'someone-else');
-        await page.click('#backWorkflowBtn');
-        await page.waitForTimeout(600);
-        const modalShown = await visible(page, '#g-dialog-container .modal-dialog');
+        const wasModal = await clickThroughGuard(page, '#backWorkflowBtn', false);
         check('leaving with unsaved changes prompts',
-            nativeDialogs > dialogsBefore || modalShown,
-            nativeDialogs > dialogsBefore ? 'native confirm' : `modal=${modalShown}`);
+            nativeDialogs > dialogsBefore || wasModal,
+            wasModal ? 'girder modal' : 'native confirm');
         check('dismissing the prompt keeps you in the builder',
             await visible(page, '#builderScreen'));
 
-        // Put the field back so the builder is clean before the lifecycle
-        // starts; the guard above left it dirty on purpose.
+        // Accepting has to actually leave. Nothing asserted this before, and it
+        // is the half of the guard that C5 is most likely to break: the guard
+        // must stop preventing the navigation once you agree to it.
+        dialogsBefore = nativeDialogs;
+        await clickThroughGuard(page, '#backWorkflowBtn', true);
+        await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 15000 })
+            .catch(() => {});
+        check('accepting the prompt leaves the builder',
+            await visible(page, '#configurationPicker'),
+            `prompted=${nativeDialogs > dialogsBefore}`);
+
+        // Back in, clean, for the lifecycle.
+        await page.click('#buildConfigBtn');
+        await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 15000 });
         await page.fill('#operator', ADMIN);
 
         // ---- the full lifecycle: submit, generate, register --------------
