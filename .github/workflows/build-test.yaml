@@ -74,8 +74,8 @@ jobs:
       # girder-jsonforms takes a Redis lock while ensuring its projects
       # collection at load time. It logs and proceeds when Redis is missing,
       # but its own CI runs one, so match that rather than relying on the
-      # fallback path. Note there is deliberately no message broker here --
-      # see the eagerWorkerTasks note in tests/test_api.py.
+      # fallback path. Note there is deliberately no broker for the pytest job
+      # -- see the eagerWorkerTasks note in tests/test_api.py.
       redis:
         image: redis:7
         ports:
@@ -169,6 +169,18 @@ jobs:
       GIRDER_URL: http://127.0.0.1:8989
       GIRDER_ADMIN: admin
       GIRDER_PASSWORD: adminpassword
+      # Unlike the pytest job, this one needs a real broker. Creating a
+      # deposition fires `deposition.created`, whose JSONForms handler enqueues
+      # an AIMD task with .delay() -- and .delay() needs somewhere to enqueue to
+      # even though the task returns early without a token. pytest sidesteps
+      # that with pytest_girder's eagerWorkerTasks fixture; a running server
+      # cannot.
+      #
+      # Redis, matching the deploy-dev stack, which runs Celery over the same
+      # Redis it uses for notifications rather than a separate broker.
+      GIRDER_WORKER_BROKER: redis://127.0.0.1:6379/
+      GIRDER_WORKER_BACKEND: redis://127.0.0.1:6379/
+      GIRDER_NOTIFICATION_REDIS_URL: redis://127.0.0.1:6379/
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7

@@ -141,8 +141,15 @@ def main():
     workspace = find_or_create_folder(collection["_id"], WORKSPACE)
     print(f"  collection {collection['_id']} / folder {workspace['_id']}")
 
-    foil = find_or_create_foil()
-    print(f"  foil deposition {foil['_id']} ({foil.get('igsn') or 'no igsn'})")
+    # A foil is what makes the material dropdown non-empty. If the instance
+    # cannot mint one -- no broker for the deposition.created handler, say --
+    # keep going: verify.cjs skips the checks that need a material rather than
+    # losing the whole rendering walk to it.
+    try:
+        foil = find_or_create_foil()
+        print(f"  foil deposition {foil['_id']} ({foil.get('igsn') or 'no igsn'})")
+    except SystemExit as exc:
+        print(f"  WARNING: no foil material seeded: {exc}")
 
     dashboards = call("GET", "dashboard", {"includeDisabled": "true"}) or []
     flycut = next((d for d in dashboards if d["key"] == "flycut-config"), None)
