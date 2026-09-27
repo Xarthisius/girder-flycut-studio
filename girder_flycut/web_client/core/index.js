@@ -8,4 +8,5 @@ export {
     usedLaserCount, resolveLaserForLayer
 } from './laser.js';
 export { selectableConfigs, groupedOptions, byNewest, STAGES } from './records.js';
+export { workflowState } from './workflow.js';
 export { exportDecision, INCOMPLETE, UNACKNOWLEDGED } from './validate.js';

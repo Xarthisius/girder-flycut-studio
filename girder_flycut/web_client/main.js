@@ -11,6 +11,7 @@
  */
 import createBuilder from './builder.js';
 import { groupedOptions, selectableConfigs } from './core/records.js';
+import { workflowState } from './core/workflow.js';
 import './styles/dashboard.css';
 import template from './templates/dashboard.html?raw';
 
@@ -115,31 +116,26 @@ const Dashboard = View.extend({
             showScreen('configurationPicker');
         };
         const savedTime = (record) => record?.savedAt ? new Date(record.savedAt).toLocaleString() : '';
+        // The decision is core/workflow.js; this is the part that writes to the
+        // DOM. Every control comes back with the same four optional keys, so
+        // there is one loop rather than twenty-five assignments.
+        const applyState = (controls) => {
+            for (const [selector, spec] of Object.entries(controls)) {
+                const node = $(selector);
+                if ('text' in spec) { node.textContent = spec.text; }
+                if ('disabled' in spec) { node.disabled = spec.disabled; }
+                if ('hidden' in spec) { node.classList.toggle('hidden', spec.hidden); }
+                if ('href' in spec) { node.href = spec.href; }
+            }
+        };
         const renderHome = () => {
-            $('#buildConfigBtn').textContent = activeConfig ? (activeConfig.status === 'draft' ? 'Edit config' : 'View config') : 'Build config';
-            $('#buildConfigBtn').disabled = busy;
-            $('#presetPicker').classList.add('hidden');
-            $('#presetSelect').disabled = true;
-            $('#savedConfigs').disabled = busy;
-            $('#submittedConfigs').disabled = busy;
-            $('#configurationStepBtn').disabled = busy;
-            $('#completeWorkflowBtn').disabled = busy;
-            $('#lightburnStepBtn').disabled = busy;
-            $('#registerBtn').disabled = busy;
-            const generation = saved.find((record) => record._id === $('#submittedConfigs').value);
-            $('#generateBtn').disabled = busy || !generation || generation.status !== 'submitted' || generation.canEdit === false;
-            $('#deleteFilesBtn').classList.toggle('hidden', generation?.status !== 'generated');
-            $('#deleteFilesBtn').disabled = busy || generation?.canEdit === false;
-            $('#generatedFolderLink').classList.toggle('hidden', !generation?.folderId || !['generated', 'registered'].includes(generation?.status));
-            $('#generatedFolderLink').href = generation?.folderId ? '#folder/' + generation.folderId : '#';
-            $('#filesHint').textContent = generation ? 'Status: ' + generation.status : '';
-            const registration = saved.find((record) => record._id === $('#registrationConfigs').value);
-            $('#registrationConfigs').disabled = busy;
-            $('#registerStackBtn').disabled = busy || registration?.status !== 'generated' || registration?.canEdit === false;
-            $('#registrationHint').textContent = registration?.status === 'registered' ? 'Registered · ' + (registration.registration?.igsn || '') : '';
-            const igsn = registration?.status === 'registered' && !registration.registration?.mock ? registration.registration?.igsn : null;
-            $('#viewIgsnLink').classList.toggle('hidden', !igsn);
-            $('#viewIgsnLink').href = igsn ? '#igsn/' + encodeURIComponent(igsn) : '#';
+            applyState(workflowState({
+                activeConfig,
+                saved,
+                busy,
+                generationId: $('#submittedConfigs').value,
+                registrationId: $('#registrationConfigs').value
+            }));
             $('#artifacts').replaceChildren();
         };
         const refresh = async () => {
