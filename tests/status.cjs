@@ -1,3 +1,6 @@
+/* eslint-disable no-new-func, no-return-assign -- these suites extract functions
+   from app.js by string-slicing and eval them. Tracked as issue D1; Phase 3
+   extracts the same functions into importable modules and this disappears. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');

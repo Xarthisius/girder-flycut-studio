@@ -122,9 +122,59 @@ app = sub(app, 'renderAutocomplete();\n    fillSelect',
           'renderAutocomplete();\n    $("#operator").value = currentUser.get("login");\n    fillSelect')
 app = sub(app, 'renderCustomFields(); loadOptions();', 'renderCustomFields(); await loadOptions();')
 
+# Everything the dashboard shell destructures out of the builder. The shell and
+# the builder are separate files that end up sharing one closure, so nothing
+# would report a mismatch at runtime -- the shell would just get `undefined`
+# and fail somewhere unrelated. Both sides are checked against this list below.
+BUILDER_EXPORTS = [
+    '$', 'changeTemplate', 'cleanupTooltips', 'clearValidation', 'configObject',
+    'confirmExport', 'escapeHtml', 'finalConfigObject', 'importJson', 'makeLaser',
+    'renderCustomFields', 'state', 'toast', 'updateAll', 'updateAssignmentUI',
+]
+
+
+def check_builder_interface(app_source, wrapper_source):
+    """Fail the build when the builder and the shell disagree on their interface."""
+    for name in BUILDER_EXPORTS:
+        # `\b` is useless here: `$` is not a word character, so anchor on a
+        # negative lookahead for one instead.
+        declared = re.search(
+            r'^(?:async\s+)?(?:function\s+%s(?![\w$])|(?:const|let|var)\s+%s(?![\w$]))'
+            % (re.escape(name), re.escape(name)),
+            app_source, re.M)
+        if not declared:
+            raise BuildError(
+                f'build_dashboard: {name!r} is exported to the dashboard shell but is not '
+                'declared at the top level of app.js.')
+    block = search(wrapper_source, r'const \{(.*?)\} = await FLYCUT_BUILDER\(', re.S)
+    destructured = {n.strip() for n in block.split('{')[1].split('}')[0].split(',') if n.strip()}
+    if destructured != set(BUILDER_EXPORTS):
+        raise BuildError(
+            'build_dashboard: client_wrapper.js destructures '
+            f'{sorted(destructured)} but the builder exports {sorted(BUILDER_EXPORTS)}.')
+
+
 wrapper = (OUT / 'client_wrapper.js').read_text()
-wrapper = sub(wrapper, '/* TEMPLATE */', json.dumps(html))
-wrapper = sub(wrapper, '/* STYLES */', json.dumps(css))
-wrapper = sub(wrapper, '/* BUILDER */', app)
+check_builder_interface(app, wrapper)
+
+# app.js is a script full of top-level state and listeners. Wrapping it in a
+# function is what lets the shell call it per render instead of once per page,
+# and is the first half of giving each dashboard instance its own state.
+# async because the builder body contains a top-level `await loadOptions()`.
+# It used to be inlined straight into the shell's async startBuilder(), which
+# is what made that legal; the shell now awaits the builder instead, which
+# suspends at exactly the same point.
+builder = (
+    'async function ({mount, currentUser, fetch}) {\n'
+    + app
+    + '\nreturn {' + ', '.join(BUILDER_EXPORTS) + '};\n}'
+)
+
+wrapper = sub(wrapper, "    const FLYCUT_STYLES = '';",
+              '    const FLYCUT_STYLES = ' + json.dumps(css) + ';')
+wrapper = sub(wrapper, "    const FLYCUT_TEMPLATE = '';",
+              '    const FLYCUT_TEMPLATE = ' + json.dumps(html) + ';')
+wrapper = sub(wrapper, '    const FLYCUT_BUILDER = () => ({});',
+              '    const FLYCUT_BUILDER = ' + builder + ';')
 (OUT / 'web_client/main.js').write_text(wrapper)
 print('Built Flyer Studio browser bundle.')

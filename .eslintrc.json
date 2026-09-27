@@ -1,0 +1,60 @@
+{
+  "root": true,
+  "extends": [
+    "@girder"
+  ],
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "script"
+  },
+  "globals": {
+    "girder": "readonly"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "vendor/",
+    ".venv/",
+    "build/",
+    "dist/",
+    "girder_flycut/web_client/main.js"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "tests/**/*.cjs"
+      ],
+      "env": {
+        "browser": false,
+        "node": true
+      },
+      "parserOptions": {
+        "sourceType": "script"
+      }
+    }
+  ],
+  "rules": {
+    "arrow-parens": "off",
+    "block-spacing": "off",
+    "brace-style": "off",
+    "comma-spacing": "off",
+    "comma-style": "off",
+    "curly": "off",
+    "indent": "off",
+    "key-spacing": "off",
+    "keyword-spacing": "off",
+    "no-floating-decimal": "off",
+    "no-multiple-empty-lines": "off",
+    "object-curly-newline": "off",
+    "object-curly-spacing": "off",
+    "object-property-newline": "off",
+    "padded-blocks": "off",
+    "quotes": "off",
+    "space-before-blocks": "off",
+    "space-infix-ops": "off",
+    "promise/no-native": "off"
+  }
+}

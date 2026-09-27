@@ -1,5 +1,20 @@
-/* Source template; build_dashboard.py inserts the existing builder and scoped styles. */
+/**
+ * Flyer Studio dashboard shell.
+ *
+ * The three constants below are this file's inputs, and build_dashboard.py
+ * replaces each declaration with the real thing: the scoped stylesheet, the
+ * markup, and the configuration builder wrapped as a function. They are
+ * declared as stubs so that this file is a complete, valid program on its own
+ * -- it parses, lints, and opens in an editor exactly as committed. It used to
+ * carry `/* STYLES *\/`-style comment markers instead, which meant no
+ * JavaScript tool could read the file at all.
+ */
 (function () {
+    // Replaced by build_dashboard.py. In Phase 2 these become plain imports.
+    const FLYCUT_STYLES = '';
+    const FLYCUT_TEMPLATE = '';
+    const FLYCUT_BUILDER = () => ({});
+
     const View = girder.views.View;
     const request = async (url, method = 'GET', data) => {
         try {
@@ -20,10 +35,10 @@
             this.el.append(host);
             const mount = host.attachShadow({mode: 'open'});
             const style = document.createElement('style');
-            style.textContent = /* STYLES */;
+            style.textContent = FLYCUT_STYLES;
             mount.append(style);
             const container = document.createElement('div');
-            container.innerHTML = /* TEMPLATE */;
+            container.innerHTML = FLYCUT_TEMPLATE;
             mount.append(container);
             this.cleanupBuilder = null;
             this.ready = this.startBuilder(mount, currentUser).catch(error => { container.textContent = error.message; });
@@ -46,7 +61,14 @@
                 const result = await request(url.replace('/api/', ''), options.method || 'GET', data);
                 return {ok: true, json: async () => result};
             };
-            /* BUILDER */
+            // The builder owns the form; these are the bindings the workflow
+            // chrome below needs from it. build_dashboard.py checks that this
+            // list and the builder's exports agree.
+            const {
+                $, changeTemplate, cleanupTooltips, clearValidation, configObject,
+                confirmExport, escapeHtml, finalConfigObject, importJson, makeLaser,
+                renderCustomFields, state, toast, updateAll, updateAssignmentUI
+            } = await FLYCUT_BUILDER({mount, currentUser, fetch});
             let busy = false;
             let completeWorkflow = false;
             let readOnly = false;
@@ -54,7 +76,8 @@
             const snapshot = () => JSON.stringify({config:configObject(), operator:$('#operator').value,
                 fields:state.customFields, lasers:state.laserParams, name:$('#saveAsName').value});
             const dirty = () => !readOnly && !$('#builderScreen').classList.contains('hidden') && snapshot() !== baseline;
-            const canLeave = () => !dirty() || confirm('You have unsaved changes. Leave without saving? Choose Cancel to return and save.');
+            // eslint-disable-next-line no-alert -- synchronous gate; C5/Phase 4 makes canLeave() async
+        const canLeave = () => !dirty() || confirm('You have unsaved changes. Leave without saving? Choose Cancel to return and save.');
             const status = message => { $('#runStatus').textContent = message; };
             const showScreen = id => {
                 for (const screen of ['workflowHome', 'configurationPicker', 'lightburnPicker', 'registrationPicker', 'builderScreen', 'adminSettingsScreen'])
@@ -322,6 +345,7 @@
                 await refresh(); status('Files generated.');
             });
             act('#deleteFilesBtn', async () => {
+                // eslint-disable-next-line no-alert -- C5/Phase 4
                 if (!confirm('Delete this configuration’s generated files? It will return to submitted and its Stack ID can be reused.')) return;
                 await request('config/' + $('#submittedConfigs').value + '/files', 'DELETE');
                 await refresh(); status('Generated files deleted. Configuration is submitted.');

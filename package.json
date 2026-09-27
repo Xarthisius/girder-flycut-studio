@@ -1,0 +1,23 @@
+{
+  "name": "girder-flycut-studio",
+  "version": "1.0.0",
+  "description": "Linting for the Flyer Studio browser sources",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "build": "python3 build_dashboard.py",
+    "lint": "eslint .",
+    "format": "eslint --fix .",
+    "test": "node tests/status.cjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs"
+  },
+  "devDependencies": {
+    "@girder/eslint-config": "^3.2.17",
+    "eslint": "^8.57.1",
+    "eslint-config-semistandard": "^17.0.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-backbone": "^2.1.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-n": "^15.7.0",
+    "eslint-plugin-promise": "^6.6.0"
+  }
+}

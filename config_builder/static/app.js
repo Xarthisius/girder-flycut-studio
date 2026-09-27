@@ -320,12 +320,6 @@ async function importExcel(file) {
   } finally { $("#excelFile").value = ""; }
 }
 
-async function persistCache() {
-  const response = await fetch("/api/cache", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operator: $("#operator").value.trim() || state.knownOperators[0] || "", field_names: state.customFields.map(field => field.name.trim()).filter(Boolean) }) });
-  if (!response.ok) return;
-  const cache = await response.json(); state.knownOperators = cache.operators || []; state.knownFieldNames = cache.field_names || []; renderAutocomplete();
-}
-
 async function importJson(file, savedSnapshot = false) {
   if (!file) return;
   try {
@@ -374,6 +368,7 @@ $("#addCustomBtn").addEventListener("click", () => { state.customFields.push({id
 $('#saveState').addEventListener('click', () => { $('[data-tab="status"]').click(); $('#statusPanel').scrollIntoView({block:'nearest',behavior:'smooth'}); });
 $$('.tab').forEach(tab => tab.addEventListener("click", () => { $$('.tab').forEach(t => { t.classList.toggle("active", t === tab); t.setAttribute("aria-selected", t === tab); }); $$('.viewer-panel').forEach(panel => panel.classList.toggle("active", panel.id === `${tab.dataset.tab}Panel`)); }));
 $("#copyBtn").addEventListener("click", async () => { if (!confirmExport()) return; await navigator.clipboard.writeText(JSON.stringify(finalConfigObject(),null,2)); toast("JSON copied to clipboard"); });
+// eslint-disable-next-line no-alert -- C5/Phase 4; build_dashboard.py drops this line
 $("#resetBtn").addEventListener("click", () => { if (!confirm("Reset every field?")) return; $("#configForm").reset(); state.laserParams=[]; state.laserParams.push(makeLaser({ isDefault: true })); state.customFields=[]; state.parameterImportFile=null; state.templateDetail=null; state.zoom=1; updateAssignmentUI(); renderCustomFields(); updateAll(); });
 $("#zoomIn").addEventListener("click", () => { state.zoom=Math.min(1.5,state.zoom+.1); drawPreview(); }); $("#zoomOut").addEventListener("click", () => { state.zoom=Math.max(.6,state.zoom-.1); drawPreview(); });
 
@@ -424,6 +419,10 @@ tooltipRoot.addEventListener('pointerout', dismissHelp);
 tooltipRoot.addEventListener('focusout', dismissHelp);
 window.addEventListener('scroll', hideHelp, true);
 window.addEventListener('resize', hideHelp);
+// Called by the dashboard shell, which receives it through the builder
+// interface in build_dashboard.py. Nothing in this file calls it, so eslint
+// cannot see the consumer.
+// eslint-disable-next-line no-unused-vars
 function cleanupTooltips() {
   tooltipRoot.removeEventListener('pointerover', showHelp);
   tooltipRoot.removeEventListener('focusin', showHelp);

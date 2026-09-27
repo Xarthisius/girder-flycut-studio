@@ -13,12 +13,22 @@ Edit `config_builder/static/` for the form and `girder_flycut/client_wrapper.js`
 `workflow.html`, and `workflow.css` for the dashboard integration. Then run:
 
 ```sh
+npm ci                 # once
+npm run lint
 python build_dashboard.py
 node --check girder_flycut/web_client/main.js
-node tests/status.cjs
-node tests/workflow.cjs
-node tests/complete_workflow.cjs
+npm test               # the four .cjs suites, including tests/bundle.cjs
 ```
+
+`client_wrapper.js` is ordinary JavaScript: it declares `FLYCUT_STYLES`,
+`FLYCUT_TEMPLATE` and `FLYCUT_BUILDER` as stubs, and `build_dashboard.py` replaces each
+declaration with the real thing. It used to carry `/* STYLES */`-style comment markers in
+expression position, which meant the file did not parse and no editor or linter could read
+it. `tests/bundle.cjs` loads the built artifact against a stub `girder` global and checks
+the substitutions landed and that the shell and builder agree on their shared bindings.
+
+Formatting rules are switched off in `.eslintrc.json`; `.eslintrc.md` explains why and
+when they come back.
 
 Commit the generated `girder_flycut/web_client/main.js` with the source changes; CI
 rebuilds and fails if it is stale. Each substitution in `build_dashboard.py` asserts how
