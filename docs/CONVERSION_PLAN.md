@@ -86,8 +86,8 @@ effort. Each issue names the phase that closes it.
 | C4 | Critical | 4 | `app.js` is a module-global singleton and cannot be instantiated twice |
 | C5 | Minor | 4 | Three `no-alert` violations |
 | C6 | Minor | 6 | No plugin config page |
-| C7 | Minor | 3 | Dead and cross-file-coupled functions in `app.js` |
-| D1 | Major | 3 | JavaScript tests extract functions by string-slicing the source |
+| C7 | Minor | ~~3~~ ✓ | Dead and cross-file-coupled functions in `app.js` |
+| D1 | Major | ~~3~~ partial | JavaScript tests extract functions by string-slicing the source |
 | D2 | Major | 6 | No end-to-end browser test |
 | D3 | Minor | 0 | No coverage measurement |
 | E1 | Critical | 0 | A test-only endpoint is exposed in the production API |
@@ -307,7 +307,15 @@ two files.
 ### D · Testing
 
 #### D1 — JavaScript tests extract functions by string-slicing the source
-**Major · Phase 3**
+**Major · Phase 3 (mostly) · remainder in Phase 4**
+
+*Revised in Phase 3.* Eight slices became four. `tests/status.mjs` imports
+`assessConfiguration`, `restoreImportedLaser` and `exportDecision` outright and slices
+nothing; `groupedOptions` and `selectableConfigs` are imported by the other two suites.
+What is left is `renderHome`, `canLeave`, `configure` and the submit flow — all DOM
+orchestration over the shell's closure, which cannot be imported until Phase 4 turns the
+shell into Backbone views. Those four are the reason the eslint `no-new-func` disables
+survive.
 
 `status.cjs` does
 `new Function(source.slice(source.indexOf('function assessConfiguration('), source.indexOf('\nfunction configurationStatus')))`,

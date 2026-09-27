@@ -11,7 +11,7 @@
     "dev": "npm run generate && vite build --watch",
     "lint": "eslint .",
     "format": "eslint --fix .",
-    "test": "node tests/status.cjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs",
+    "test": "node tests/status.mjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs",
     "check-version": "node girder_flycut/web_client/build/check-version.mjs"
   },
   "devDependencies": {
