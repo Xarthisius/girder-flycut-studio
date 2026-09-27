@@ -1,10 +1,14 @@
+import csv
+import io
 import json
-from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from girder_flycut.generate import generate
-from girder_flycut.validation import normalize_config
+from girder_flycut.schema import pack, unpack
+from girder_flycut.template_identity import id_cut, resolve_template
+from girder_flycut.validation import assignment_options, normalize_builder_config, normalize_config
 
 CATALOG = json.loads((Path(__file__).parents[1] / "girder_flycut/catalog.json").read_text())
 CATALOG["materials"] = [{"id": "JHAMAB00010"}]
@@ -136,8 +140,6 @@ class AssignmentControlsTest(unittest.TestCase):
             )
 
     def test_assignment_validation_and_legacy_import(self):
-        from girder_flycut.validation import assignment_options
-
         self.assertEqual(assignment_options({"repeat": 1, "wraparound": True}), (1, True))
         self.assertEqual(assignment_options({"style": "exact", "x": 8}), (1, False))
         self.assertEqual(assignment_options({"style": "cycle", "x": 8}), (1, True))
@@ -169,8 +171,6 @@ class DisabledParametersTest(unittest.TestCase):
 
 class BuilderExportTest(unittest.TestCase):
     def test_warning_values_and_fallbacks(self):
-        from girder_flycut.validation import normalize_builder_config
-
         config = configuration()
         config["run_params"].update(stackid="00005", operator="")
         config["custom_fields"] = {"empty": ""}
@@ -185,8 +185,6 @@ class BuilderExportTest(unittest.TestCase):
 
 class SectionSchemaTest(unittest.TestCase):
     def test_roundtrip_and_order(self):
-        from girder_flycut.schema import pack, unpack
-
         original = normalize_config(configuration(), USER, CATALOG)
         final = pack(original)
         self.assertEqual(list(final)[:4], ["preset", "run_parameters", "laser_parameters", "custom_fields"])
@@ -198,10 +196,6 @@ class SectionSchemaTest(unittest.TestCase):
 
 
 def test_output_groups_and_short_template_identity(tmp_path):
-    from girder_flycut.template_identity import resolve_template, id_cut
-    import csv
-    import io
-
     originals = Path(__file__).parents[1] / "girder_flycut/inputs/templates"
     identifiers = []
     for path in originals.glob("*.lbrn2"):

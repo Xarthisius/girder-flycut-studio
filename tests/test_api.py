@@ -1,14 +1,33 @@
+import base64
+import csv
+import io
 import json
 from datetime import datetime, timezone
 
 import pytest
+from bson import ObjectId
+from girder.constants import AccessType
+from girder.models.collection import Collection
+from girder.models.file import File
 from girder.models.folder import Folder
+from girder.models.group import Group
 from girder.models.item import Item
+from girder.models.setting import Setting
+from girder.models.token import Token
+from girder.models.upload import Upload
 from girder.models.user import User
 from girder_dashboards.models.dashboard import Dashboard
+from girder_jsonforms.models.deposition import Deposition
+from girder_jsonforms.settings import PluginSettings
+from openpyxl import Workbook
 from pytest_girder.assertions import assertStatus, assertStatusOk
+from test_dashboard import CATALOG, configuration
 
-from test_dashboard import configuration
+from girder_flycut.generate import generate
+from girder_flycut.import_storage import link_input
+from girder_flycut.registration import is_test_run
+from girder_flycut.schema import pack
+from girder_flycut.validation import normalize_config
 
 pytestmark = pytest.mark.plugin("flycut")
 
@@ -26,8 +45,6 @@ def enabled(server, db, user, request, fsAssetstore, eagerWorkerTasks):
     # Nothing here stubs the IGSN registry: get_client() already returns None
     # while jsonforms.igsn_service_url is empty, which is the default, so the
     # local PrefixCounter allocates identifiers exactly as in a local install.
-    from girder_jsonforms.models.deposition import Deposition
-
     if request.node.name not in {
         "test_registration_uses_model_and_is_idempotent",
         "test_register_requires_parent_write",
@@ -45,8 +62,6 @@ def enabled(server, db, user, request, fsAssetstore, eagerWorkerTasks):
             public=False,
         )
     doc = Dashboard().findOne({"key": "flycut-config"})
-    from girder.models.collection import Collection
-
     collection = Collection().createCollection("Flyer tests", creator=user, public=False)
     folder = Folder().createFolder(collection, "Workspace", parentType="collection", creator=user, public=False)
     doc["settings"] = {"workspace_folder_id": str(folder["_id"]), "owners_include_user": True}
@@ -56,10 +71,7 @@ def enabled(server, db, user, request, fsAssetstore, eagerWorkerTasks):
     # every item save carrying meta.igsn reaches propagate_to_projects(), which
     # raises a 404 resolving an AIMDL collection that does not exist here.
     # See docs/JSONFORMS_COMPATIBILITY.md.
-    from girder.models.setting import Setting
-    from girder_jsonforms.settings import PluginSettings as JsonformsSettings
-
-    Setting().set(JsonformsSettings.PROJECTS_ENABLED, False)
+    Setting().set(PluginSettings.PROJECTS_ENABLED, False)
     return doc
 
 
@@ -101,8 +113,6 @@ def test_generation_persists_bundle(server, enabled, user, fsAssetstore):
     download = server.request("/file/" + response.json["files"][0]["_id"] + "/download", user=user, isJson=False)
     assertStatusOk(download)
     # Browser navigation sends the session cookie, not the AJAX token header.
-    from girder.models.token import Token
-
     cookie = "girderToken=" + str(Token().createToken(user)["_id"])
     artifact = response.json["files"][0]
     for resource, identifier in [("file", artifact["_id"]), ("item", artifact["itemId"])]:
@@ -129,10 +139,6 @@ def test_validation_and_dashboard_acl(server, enabled, user):
 
 
 def test_registration_uses_model_and_is_idempotent(server, enabled, user, fsAssetstore):
-    from girder_jsonforms.models.deposition import Deposition
-    from girder_jsonforms.settings import PluginSettings
-    from girder.models.setting import Setting
-
     Setting().set(PluginSettings.IGSN_PREFIX, "10.12345")
     model = Deposition()
     parent = model.create_deposition(
@@ -169,8 +175,6 @@ def test_registration_uses_model_and_is_idempotent(server, enabled, user, fsAsse
 
 
 def test_register_requires_parent_write(server, enabled, user, admin, fsAssetstore):
-    from girder_jsonforms.models.deposition import Deposition
-
     Deposition().create_deposition(
         {
             "titles": [{"title": "Restricted foil"}],
@@ -272,12 +276,6 @@ def test_draft_save_update_submit_and_immutability(server, enabled, user):
 
 
 def test_portal_template_and_timestamped_draft(server, enabled, user, admin, fsAssetstore):
-    import io
-    from girder.models.upload import Upload
-    from girder_flycut.generate import generate
-    from girder_flycut.validation import normalize_config
-    from test_dashboard import CATALOG
-
     folder = Folder().createFolder(user, "Portal templates", parentType="user", creator=user, public=False)
     original = normalize_config(configuration(), user, CATALOG)
     data = generate(original)["stack00005-layout.lbrn2"][0]
@@ -435,8 +433,6 @@ def test_lifecycle_replacement_files_and_mock_registration(server, enabled, user
     assertStatusOk(removed)
     assert removed.json["status"] == "submitted"
     for artifact in generated.json["files"]:
-        from girder.models.file import File
-
         assert File().load(artifact["_id"], force=True) is None
     assertStatusOk(server.request("/flycut/config", method="POST", user=user, params=params))
     assertStatusOk(server.request(endpoint + "/generate", method="POST", user=user))
@@ -469,8 +465,6 @@ def test_presets_disabled_preserve_explicit_fields(server, enabled, user):
 @pytest.mark.plugin("jsonforms")
 @pytest.mark.parametrize("test_run", [True, False])
 def test_live_foil_catalog_and_dynamic_registration(server, enabled, user, admin, fsAssetstore, test_run):
-    from girder_jsonforms.models.deposition import Deposition
-
     model = Deposition()
 
     def foil(igsn, owner, local, public=False):
@@ -507,9 +501,6 @@ def test_live_foil_catalog_and_dynamic_registration(server, enabled, user, admin
     endpoint = "/flycut/config/" + saved.json["_id"]
     generated = server.request(endpoint + "/generate", method="POST", user=user)
     assertStatusOk(generated)
-    from girder.models.file import File
-    from bson import ObjectId
-
     artifact = next(f for f in generated.json["files"] if f["name"].endswith("metadata.json"))
     with File().open(File().load(ObjectId(artifact["_id"]), force=True)) as stream:
         exported = json.load(stream)
@@ -547,10 +538,8 @@ def test_live_foil_catalog_and_dynamic_registration(server, enabled, user, admin
         meta = Item().load(file["itemId"], force=True)["meta"]
         if file["name"].endswith("-inventory.csv"):
             assert meta == {"foilIgsn": parent["igsn"], "igsn": child["igsn"], "stackid": "00005"}
-            import csv
-
             with File().open(File().load(ObjectId(file["_id"]), force=True)) as stream:
-                rows = list(csv.DictReader(__import__("io").StringIO(stream.read().decode())))
+                rows = list(csv.DictReader(io.StringIO(stream.read().decode())))
             assert rows and {row["status"] for row in rows} == {"registered"}
         elif file["name"].endswith("-metadata.json"):
             assert meta["igsn"] == child["igsn"]
@@ -569,9 +558,6 @@ def test_live_foil_catalog_and_dynamic_registration(server, enabled, user, admin
 
 
 def test_registration_rejects_missing_artifact(server, enabled, user, fsAssetstore):
-    from girder.models.file import File
-    from bson import ObjectId
-
     saved = server.request(
         "/flycut/config",
         method="POST",
@@ -588,8 +574,6 @@ def test_registration_rejects_missing_artifact(server, enabled, user, fsAssetsto
     "value, expected", [("true", True), ("false", False), ("yes", True), ("0", False), (None, False)]
 )
 def test_test_run_values(value, expected):
-    from girder_flycut.registration import is_test_run
-
     assert is_test_run({"custom_fields": {"test_run": value}}) is expected
 
 
@@ -627,10 +611,6 @@ def test_admin_settings_validation(server, enabled, user, admin):
 
 @pytest.mark.plugin("jsonforms")
 def test_shared_workspace_access_and_creator_policy(server, enabled, user, admin, fsAssetstore):
-    from girder.models.group import Group
-    from girder.constants import AccessType
-    from girder_jsonforms.models.deposition import Deposition
-
     group = Group().createGroup("Owners", creator=user, public=False)
     editor = User().createUser("editor", "password123", "Other", "Editor", "editor@example.org")
     viewer = User().createUser("viewer", "password123", "Read", "Only", "viewer@example.org")
@@ -725,9 +705,6 @@ def test_untitled_draft_promotes_to_stack_folder(server, enabled, user, fsAssets
 
 @pytest.mark.plugin("jsonforms")
 def test_canonical_config_and_history(server, enabled, user):
-    from girder.models.file import File
-    from girder_flycut.schema import pack
-
     cfg = pack(configuration())
     cfg["laser_parameters"].pop("style", None)
     cfg["laser_parameters"].pop("x", None)
@@ -777,12 +754,6 @@ def test_canonical_config_and_history(server, enabled, user):
 
 @pytest.mark.plugin("jsonforms")
 def test_excel_input_links(server, enabled, user):
-    import base64
-    import io
-    from openpyxl import Workbook
-    from girder.models.file import File
-    from girder_jsonforms.models.deposition import Deposition
-
     workbook = Workbook()
     workbook.active.append(["power", "speed", "qpulsewidth", "frequency", "passes"])
     workbook.active.append([20, 100, 200, 100, 1])
@@ -832,8 +803,6 @@ def test_excel_input_links(server, enabled, user):
     endpoint = "/flycut/config/" + second.json["_id"]
     assertStatusOk(server.request(endpoint + "/generate", method="POST", user=user))
     assertStatusOk(server.request(endpoint + "/register", method="POST", user=user))
-    from girder_flycut.import_storage import link_input
-
     link_input(input_item, {"igsn": "JHAMAB00010-00006"})
     meta = Item().load(ref["itemId"], force=True)["meta"]
     assert set(meta) == {"igsn"}

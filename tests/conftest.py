@@ -1,4 +1,5 @@
 import pytest
+from girder_dashboards import registry
 
 
 @pytest.fixture(autouse=True)
@@ -14,7 +15,6 @@ def clean_dashboard_registry():
     loads the plugins named in a `@pytest.mark.plugin` marker, so the ones
     girder-jsonforms drags in never start.
     """
-    from girder_dashboards import registry
     saved = dict(registry._dashboards)
     listeners = list(registry._listeners)
     yield
