@@ -2,14 +2,13 @@
  * The Flyer Studio policy screen: workspace folder, the four principal roles,
  * and the visibility flags.
  *
- * Reachable only by un-hiding #adminSettingsBtn, which the shell hides
- * unconditionally -- issue G1. Decision 4 promotes it to
- * #plugins/flycut/config in Phase 6, and it is a view first so that promotion
- * is a route and a parent, not a rewrite.
+ * Mounted by ConfigView at #plugins/flycut/config -- Decision 4, which 6b
+ * landed. Being a view already is what made that promotion a route and a
+ * parent rather than a rewrite.
  *
  * Its el is the screen itself: the template holds the section's contents and
- * tagName/id/className supply the wrapper, so nothing nests and the shell's
- * showScreen() still finds #adminSettingsScreen by id.
+ * tagName/id/className supply the wrapper, so nothing nests. It still starts
+ * `hidden`, which ConfigView clears, because it is the only screen there.
  */
 import adminSettingsTemplate from '../templates/adminSettings.pug';
 import { escapeHtml, request } from '../util.js';
