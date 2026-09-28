@@ -127,7 +127,7 @@ def test_running_twice_changes_nothing(server, enabled, user):  # noqa: F811
     after_first = Item().load(item["_id"], force=True)
 
     second = migrations.run()
-    assert second == {"moved": 0, "stale": 0, "timestamps": 0, "droppedStackLocks": False}
+    assert second == {"moved": 0, "stale": 0, "timestamps": 0, "actions": 0, "droppedStackLocks": False}
     assert Item().load(item["_id"], force=True) == after_first
 
 
@@ -155,3 +155,17 @@ def test_drops_the_mongo_stack_lock_collection(server, enabled, user):  # noqa: 
 
     # Dropping what is not there is a no-op, so every later load is cheap.
     assert migrations.run()["droppedStackLocks"] is False
+
+
+def test_drops_the_dead_action_field(server, enabled, user):  # noqa: F811
+    """`meta.flycut.action` named the operation holding `busy` and was read by nothing."""
+    item = _legacy(user, "old-action", {"flycut": {"status": "generated", "busy": False, "action": "generate"}})
+
+    assert migrations.run()["actions"] == 1
+
+    state = Item().load(item["_id"], force=True)["meta"]["flycut"]
+    assert "action" not in state
+    # `busy` stays: it is the compare-and-swap that still refuses a second
+    # generation when the stack lock has expired under its holder.
+    assert state["busy"] is False
+    assert migrations.run()["actions"] == 0

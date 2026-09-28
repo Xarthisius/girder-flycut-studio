@@ -48,8 +48,9 @@ class LifecycleRoutes:
         """
         return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)
 
-    def lock(self, item, action):
-        if not FlycutConfig().claimBusy(item, action):
+    def lock(self, item):
+        """Claim this configuration, or refuse. See `FlycutConfig.claimBusy`."""
+        if not FlycutConfig().claimBusy(item):
             raise RestException("This configuration is already being processed.", code=409)
 
     @access.user
@@ -77,7 +78,7 @@ class LifecycleRoutes:
             for other in self.stack_matches(stack)
         ):
             raise RestException("Another configuration for this Stack ID is generated or registered.", code=409)
-        self.lock(item, "generate")
+        self.lock(item)
         folder = None
         files = []
         try:
@@ -203,7 +204,7 @@ class LifecycleRoutes:
         settings = studio_settings.policy()
         configured_creators = studio_settings.creators(settings, user)
         input_item = load_input(config, user, write=True)
-        self.lock(item, "register")
+        self.lock(item)
         try:
             child_igsn = f"{parent['igsn']}-{config['run_params']['stackid']}"
             child = model.findOne({"igsn": child_igsn})

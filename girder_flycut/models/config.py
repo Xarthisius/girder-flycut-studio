@@ -231,23 +231,39 @@ class FlycutConfig(Item):
             doc["meta"].update(metadata)
         return self.save(doc)
 
-    def claimBusy(self, item, action):
+    def claimBusy(self, item):
         """Mark the configuration in progress, unless something already has.
 
         A compare-and-swap, and not reducible to a read-modify-write: two
         requests that both read ``busy: False`` would both proceed. It stays a
         direct Mongo write for that reason.
 
-        Redundant-looking beside the stack mutex, which already excludes two
-        operations on one configuration -- but a Redis lock can expire while
-        its holder is still working, and a second request then acquires it
-        legitimately. This is what refuses the second generation in that
-        window.
+        **Why this exists at all**, since it is not obvious from either call
+        site and looks redundant beside the stack mutex. The mutex already
+        excludes two operations on one configuration, because both derive the
+        same stack ID from it -- but a Redis lock can be *legitimately*
+        released while its holder is still working: the TTL expires, and the
+        next request acquires it for real. Ownership tokens stop that holder
+        deleting the new lock; they do not stop the expiry. This
+        compare-and-swap is what still refuses the second generation inside
+        that window, and the registration path has the ``flycut_registration``
+        duplicate-key reservation as its own equivalent.
+
+        The alternative is renewing the lock rather than letting it lapse --
+        ``redis-py`` exposes ``extend()`` -- but that needs something to drive
+        the renewal from a synchronous handler. Not worth it unless generation
+        gets much slower.
+
+        ``busy`` is read nowhere else, here or in the client. It is reported to
+        the client all the same, by ``filter()`` spreading the whole lifecycle
+        blob, where it shares a name with the shell's own request-in-flight
+        flag without ever being confused for it -- the shell's lives on the
+        workflow model, not on a configuration record.
         """
         return bool(
             self.collection.update_one(
                 {"_id": item["_id"], "meta.flycut.busy": {"$ne": True}},
-                {"$set": {"meta.flycut.busy": True, "meta.flycut.action": action}},
+                {"$set": {"meta.flycut.busy": True}},
             ).modified_count
         )
 
