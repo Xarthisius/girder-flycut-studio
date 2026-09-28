@@ -1,5 +1,6 @@
 """Authenticated Girder model-backed configuration, generation and registration."""
 import base64
+import re
 from bson import ObjectId
 from functools import wraps
 from pymongo.errors import DuplicateKeyError
@@ -16,17 +17,22 @@ from girder.api.describe import Description, autoDescribeRoute
 from girder.api.rest import Resource
 from girder.constants import AccessType
 from girder.exceptions import RestException
+from girder.models.collection import Collection
 from girder.models.file import File
 from girder.models.folder import Folder
+from girder.models.group import Group
 from girder.models.item import Item
+from girder.models.user import User
 from girder.models.upload import Upload
+from girder.utility.path import getResourcePath
 from girder_dashboards.models.dashboard import Dashboard
 
 from .portal_templates import load_portal_template
 from . import KEY
 from .schema import pack, unpack
-from .validation import normalize_config, normalize_builder_config
+from .validation import normalize_config, normalize_builder_config, builder_warnings
 from .generate import generate
+from .inventory import register_inventory
 from .materials import foil_materials, resolve_material
 from .registration import is_test_run, stack_metadata, foil_identifiers
 from . import settings as studio_settings
@@ -119,12 +125,9 @@ class Flycut(Resource):
     @access.admin
     @autoDescribeRoute(Description('Flyer Studio administrative policy.'))
     def get_settings(self):
-        from girder.models.collection import Collection
         result = studio_settings.policy()
         if result['workspace_folder_id']:
             result = studio_settings.validate_settings(result)
-        from girder.models.user import User
-        from girder.models.group import Group
         for role in ('creators', 'owners', 'editors', 'viewers'):
             for ref in result[role]:
                 entity = (User() if ref['type'] == 'user' else Group()).load(ref['id'], force=True)
@@ -143,9 +146,6 @@ class Flycut(Resource):
     @access.admin
     @autoDescribeRoute(Description('Find users and groups for dashboard policy.').param('q', 'Name search', default=''))
     def settings_principals(self, q):
-        import re
-        from girder.models.user import User
-        from girder.models.group import Group
         pattern = {'$regex': re.escape(q.strip()), '$options': 'i'}
         users = User().find({'$or': [{'login': pattern}, {'firstName': pattern}, {'lastName': pattern}]}, limit=100)
         groups = Group().find({'name': pattern}, limit=100)
@@ -155,7 +155,6 @@ class Flycut(Resource):
     @access.admin
     @autoDescribeRoute(Description('Resolve a collection folder.').param('id', 'Folder ID'))
     def settings_workspace(self, id):
-        from girder.utility.path import getResourcePath
         folder = Folder().load(id, user=self.getCurrentUser(), level=AccessType.ADMIN, exc=True)
         if folder.get('baseParentType') != 'collection':
             raise RestException('Choose a folder inside a collection.')
@@ -192,7 +191,6 @@ class Flycut(Resource):
             return 'registered'
         if state.get('status') == 'draft':
             return 'draft'
-        from bson import ObjectId
         if any(File().findOne({'_id': ObjectId(file['_id'])}) for file in state.get('files', [])):
             return 'generated'
         return 'submitted'
@@ -346,7 +344,6 @@ class Flycut(Resource):
             raise RestException('Submitted configurations cannot be edited. Make a copy.', code=409)
         try:
             if submit:
-                from .validation import builder_warnings
                 config = unpack(config)
                 config['preset'] = None
                 is_test_run(config)
@@ -501,7 +498,6 @@ class Flycut(Resource):
         item = self.config_item(id, user)
         if self.lifecycle(item) == 'registered':
             raise RestException('Registered stacks cannot have their generated files deleted here.', code=409)
-        from bson import ObjectId
         for artifact in item['meta']['flycut'].get('files', []):
             file = File().load(ObjectId(artifact['_id']), user=user, level=AccessType.WRITE)
             if file:
@@ -526,6 +522,8 @@ class Flycut(Resource):
         if state.get('registration'):
             return self.serialize(item)
         try:
+            # Deferred deliberately: this is the 503 path, not a lazy import.
+            # See the note in materials.py.
             from girder_jsonforms.models.deposition import Deposition
         except ImportError as exc:
             raise RestException('Install and enable girder-jsonforms from its igsn branch.', code=503) from exc
@@ -557,7 +555,6 @@ class Flycut(Resource):
             if not child:
                 # Reserve this parent/suffix across workers before contacting the registry.
                 # The durable reservation intentionally survives uncertain registry failures.
-                from pymongo.errors import DuplicateKeyError
                 reservations = Item().collection.database['flycut_registration']
                 try:
                     reservations.insert_one({'_id': child_igsn, 'configId': id})
@@ -592,7 +589,6 @@ class Flycut(Resource):
             for artifact in artifact_items:
                 extra = {}
                 if state.get('outputSchemaVersion', 0) >= 2 and artifact['name'].endswith('-inventory.csv'):
-                    from .inventory import register_inventory
                     register_inventory(artifact, user, now)
                 if state.get('outputSchemaVersion', 0) >= 3 and artifact['name'].endswith('-metadata.json'):
                     extra['metadata'] = register_metadata(artifact, now, user)

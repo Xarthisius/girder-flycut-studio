@@ -1,4 +1,5 @@
 """Resolve portal templates through Girder's permission-checked file models."""
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import xml.etree.ElementTree as ET
@@ -33,7 +34,6 @@ def load_portal_template(identifier, user):
     subname = cut.find('subname') if cut is not None else None
     original = subname.get('Value', '') if subname is not None else ''
     if original and not original.lower().endswith('.lbrn2'):
-        import json
         matches = [json.loads(p.read_text()) for p in INPUTS.glob('*.json')]
         match = next((entry for entry in matches if entry.get('template_id') == original), None)
         original = match['template'] if match else name

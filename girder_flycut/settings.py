@@ -1,5 +1,6 @@
 """Validated dashboard policy; Girder IDs remain stable across renames."""
 import copy
+import math
 from bson import ObjectId
 from girder.constants import AccessType
 from girder.exceptions import ValidationException, RestException
@@ -23,7 +24,6 @@ def policy():
 
 def validate_settings(settings):
     result = {**copy.deepcopy(DEFAULTS), **settings}
-    import math
     defaults = result['laser_defaults']
     if not isinstance(defaults, dict) or set(defaults) != {'maxPower', 'speed', 'QPulseWidth', 'frequency', 'numPasses'}:
         raise ValidationException('laser_defaults must contain maxPower, speed, QPulseWidth, frequency, and numPasses.')

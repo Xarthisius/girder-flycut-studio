@@ -2,7 +2,10 @@
 import logging
 from pathlib import Path
 
+from girder import events
 from girder.plugin import GirderPlugin, getPlugin, registerPluginStaticContent
+from girder_dashboards import registerDashboard
+from girder_dashboards.models.dashboard import Dashboard
 
 KEY = "flycut-config"
 
@@ -13,11 +16,11 @@ class FlycutPlugin(GirderPlugin):
     DISPLAY_NAME = "Flyer Studio"
 
     def load(self, info):
-        from girder import events
-        from girder_dashboards import registerDashboard
-
+        # Deferred on purpose: settings.py does `from . import KEY`, so importing
+        # either of these at module scope is circular.
         from .rest import Flycut, ensure_lock_expiry
         from .settings import DEFAULTS, validate_dashboard
+
         events.bind('model.dashboard.save', 'flycut.settings', validate_dashboard)
 
         getPlugin("dashboards").load(info)
@@ -55,7 +58,6 @@ class FlycutPlugin(GirderPlugin):
         raise ValidationException here and take the whole server down at
         startup. A failed rename is cosmetic; refusing to boot is not.
         """
-        from girder_dashboards.models.dashboard import Dashboard
 
         def rename():
             existing = Dashboard().findOne({'key': KEY, 'name': 'Flyer Config Studio'})
