@@ -124,7 +124,11 @@ class FlycutConfig(Item):
         return {
             "_id": str(doc["_id"]),
             "name": doc["name"],
-            "savedAt": timestamp.replace(tzinfo=timezone.utc).isoformat() if timestamp else "",
+            # A datetime, like `meta.flycut.savedAt` which overrides it below.
+            # Girder's REST encoder renders either as ISO-8601, so the client
+            # sees no difference; keeping the types the same means the server
+            # can sort on it.
+            "savedAt": timestamp.replace(tzinfo=timezone.utc) if timestamp else None,
             **doc["meta"]["flycut"],
             "config": configuration(doc),
             "status": self.lifecycle(doc),

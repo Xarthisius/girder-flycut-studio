@@ -20,6 +20,7 @@ class FlycutPlugin(GirderPlugin):
     def load(self, info):
         # Deferred on purpose: settings.py does `from . import KEY`, so importing
         # either of these at module scope is circular.
+        from . import migrations
         from .models import FlycutConfig, StackLock
         from .rest import Flycut
         from .settings import DEFAULTS, validate_dashboard
@@ -42,6 +43,7 @@ class FlycutPlugin(GirderPlugin):
         # takes the whole Girder server with it, and everything below is a
         # convenience rather than a precondition for serving requests.
         self._guard("could not add the stack-lock TTL index", StackLock().ensureExpiry)
+        self._guard("could not migrate stored configurations", migrations.run)
         info["apiRoot"].flycut = Flycut()
         registerPluginStaticContent(
             plugin="flycut",

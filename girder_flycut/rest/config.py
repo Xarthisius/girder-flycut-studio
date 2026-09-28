@@ -11,9 +11,10 @@ from girder.constants import AccessType
 from girder.exceptions import RestException
 from girder.models.folder import Folder
 from girder.models.item import Item
+from girder.utility import JsonEncoder
 
 from .. import settings as studio_settings
-from ..artifacts import CONFIG_QUERY, configuration, save_config_file
+from ..artifacts import CONFIG_FIELD, CONFIG_QUERY, configuration, save_config_file
 from ..import_storage import load_input
 from ..materials import foil_materials, resolve_material
 from ..models import FlycutConfig
@@ -24,6 +25,21 @@ from ..validation import builder_warnings, normalize_builder_config
 from .catalog import CATALOG
 from .gate import gated
 from .locking import stack_locked
+
+# Sorting has to survive a deployment mid-migration, where some records still
+# carry the pre-migration ISO string. Both forms compare correctly against
+# their own kind; this puts them on one scale.
+EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _saved_at(record):
+    value = record.get("savedAt")
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        return datetime.fromisoformat(value) if value else EPOCH
+    except (TypeError, ValueError):
+        return EPOCH
 
 
 class ConfigRoutes:
@@ -78,7 +94,7 @@ class ConfigRoutes:
             for i in Item().find(CONFIG_QUERY)
             if FlycutConfig().inWorkspace(i) and Item().hasAccess(i, user, AccessType.READ)
         ]
-        return sorted(records, key=lambda record: str(record.get("savedAt") or ""), reverse=True)[:100]
+        return sorted(records, key=_saved_at, reverse=True)[:100]
 
     @access.user
     @autoDescribeRoute(Description("Stack IDs with one of your submitted configurations."))
@@ -130,7 +146,7 @@ class ConfigRoutes:
     @gated
     @stack_locked
     def save_config(self, config, name="", id="", submit=False, validated=False, user=None):
-        if len(json.dumps(config, allow_nan=False).encode()) > 256 * 1024:
+        if len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
             raise RestException("Configuration exceeds 256 KB.")
         rendered_config = copy.deepcopy(config) if "run_parameters" in config else pack(config)
         rendered_config.pop("createdBy", None)
@@ -169,7 +185,7 @@ class ConfigRoutes:
             "status": "submitted" if submit else "draft",
             "overwriteSafe": existing["meta"]["flycut"].get("overwriteSafe", True) if existing else True,
             "createdBy": str(user["_id"]),
-            "savedAt": datetime.now(timezone.utc).isoformat(),
+            "savedAt": datetime.now(timezone.utc),
             "workspaceId": studio_settings.policy()["workspace_folder_id"],
         }
         if not submit:
@@ -193,7 +209,13 @@ class ConfigRoutes:
                 promote(target, self.workspace(user, True), stack, user)
                 Item().collection.update_one(
                     {"_id": target["_id"]},
-                    {"$set": {"name": name, "meta.flycut": state, "meta.config": rendered_config}},
+                    {
+                        "$set": {"name": name, "meta.flycut": state, CONFIG_FIELD: rendered_config},
+                        # `meta.flycut` is replaced wholesale just above, which
+                        # already drops the legacy `meta.flycut.config`; naming
+                        # both a parent and its child in one update conflicts.
+                        "$unset": {"meta.config": ""},
+                    },
                 )
                 for duplicate in matches[1:]:
                     remove_config(duplicate, studio_settings.policy()["workspace_folder_id"])
@@ -207,7 +229,10 @@ class ConfigRoutes:
                 promote(existing, self.workspace(user, True), stack, user)
             result = Item().collection.update_one(
                 {"_id": existing["_id"], "meta.flycut.status": "draft"},
-                {"$set": {"name": name, "meta.flycut": state, "meta.config": rendered_config}},
+                {
+                    "$set": {"name": name, "meta.flycut": state, CONFIG_FIELD: rendered_config},
+                    "$unset": {"meta.config": ""},
+                },
             )
             if not result.modified_count and not result.matched_count:
                 raise RestException("This draft was already submitted.", code=409)

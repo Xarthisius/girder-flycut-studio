@@ -18,6 +18,7 @@ from girder.models.file import File
 from girder.models.folder import Folder
 from girder.models.item import Item
 from girder.models.upload import Upload
+from girder.utility import JsonEncoder
 from girder_jsonforms.models.deposition import Deposition
 from pymongo.errors import DuplicateKeyError
 
@@ -84,7 +85,7 @@ class LifecycleRoutes:
             config = normalize_config(raw_config, user, self.catalog_for(raw_config, user), submitted=True)
             template = config["run_params"]["template"]
             portal = self.portal_template(template, user) if template.startswith("girder:") else None
-            generated_at = datetime.now(timezone.utc).isoformat()
+            generated_at = datetime.now(timezone.utc)
             artifacts = generate(
                 config,
                 portal_template=portal,
@@ -254,23 +255,25 @@ class LifecycleRoutes:
                     {"_id": child["_id"]}, {"$addToSet": {"flycutInputs": str(input_item["_id"])}}
                 )
             Folder().setMetadata(folder, metadata)
-            now = datetime.now(timezone.utc).isoformat()
+            registered_at = datetime.now(timezone.utc)
             for artifact in artifact_items:
                 extra = {}
                 if state.get("outputSchemaVersion", 0) >= 2 and artifact["name"].endswith("-inventory.csv"):
-                    register_inventory(artifact, user, now)
+                    # The one place that still needs the string: csv.DictWriter
+                    # would render a datetime with a space separator, not ISO.
+                    register_inventory(artifact, user, registered_at.isoformat())
                 if state.get("outputSchemaVersion", 0) >= 3 and artifact["name"].endswith("-metadata.json"):
-                    extra["metadata"] = register_metadata(artifact, now, user)
+                    extra["metadata"] = register_metadata(artifact, registered_at, user)
                 annotate(artifact, metadata, extra)
             receipt = {
                 **metadata,
                 "testRun": test_run,
-                "registeredAt": now,
+                "registeredAt": registered_at,
                 "parentDepositionId": str(parent["_id"]),
                 "folderId": str(folder["_id"]),
                 "registeredBy": str(user["_id"]),
             }
-            data = json.dumps(receipt, indent=2).encode()
+            data = json.dumps(receipt, indent=2, cls=JsonEncoder).encode()
             receipt_file = Upload().uploadFromFile(
                 io.BytesIO(data),
                 len(data),
@@ -294,7 +297,7 @@ class LifecycleRoutes:
                         "meta.flycut.registration": receipt,
                         "meta.flycut.files": files,
                         "meta.flycut.status": "registered",
-                        "meta.flycut.registeredAt": now,
+                        "meta.flycut.registeredAt": registered_at,
                     }
                 },
             )

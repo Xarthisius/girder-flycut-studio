@@ -8,6 +8,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
+from girder.utility import JsonEncoder
+
 from . import engine
 from .template_identity import resolve_template, stamp_template
 from .validation import assignment_options
@@ -92,11 +94,11 @@ def generate(config, portal_template=None, material_record=None, lifecycle=None)
     metadata["unique_safe"] = True
     metadata["overwrite_safe"] = lifecycle.get("overwriteSafe", True)
     metadata["material"] = {key: material["material"].get(key) for key in ("igsn", "name")}
+    # These are datetimes now; JsonEncoder renders them ISO-8601 on the way
+    # into the artifact, the same way the REST layer renders them.
     metadata.update(
         {
-            f"time_{key}": (
-                lifecycle[value].isoformat() if hasattr(lifecycle.get(value), "isoformat") else lifecycle.get(value)
-            )
+            f"time_{key}": lifecycle.get(value)
             for key, value in [
                 ("submitted", "submittedAt"),
                 ("generated", "generatedAt"),
@@ -111,5 +113,8 @@ def generate(config, portal_template=None, material_record=None, lifecycle=None)
     return {
         stem + "-layout.lbrn2": (ET.tostring(root, encoding="utf-8", xml_declaration=True), "application/xml"),
         stem + "-inventory.csv": (text.getvalue().encode(), "text/csv"),
-        stem + "-metadata.json": (json.dumps(metadata, indent=2, allow_nan=False).encode(), "application/json"),
+        stem + "-metadata.json": (
+            json.dumps(metadata, indent=2, allow_nan=False, cls=JsonEncoder).encode(),
+            "application/json",
+        ),
     }
