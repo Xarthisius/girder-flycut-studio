@@ -126,6 +126,11 @@ no external registry is contacted while `jsonforms.igsn_service_url` is empty.
 
 None of these are inferable from the code. Each one cost a red CI run or worse.
 
+- **The live instance reloads changed code by itself.** It bind-mounts this tree and
+  restarts only the server inside the container, so `docker service update --force` is
+  ~85 seconds of waiting for nothing. If a bad intermediate state was caught mid-edit and
+  the server died on a traceback, force it instead with
+  `docker exec --user=root -ti $(docker ps --filter=name=wt_girder -q) touch /girder-plugins/__init__.py`.
 - **Celery runs over Redis, not a separate broker.** `GIRDER_WORKER_BROKER` and
   `GIRDER_WORKER_BACKEND` are both `redis://…`. Creating a deposition fires
   `deposition.created`, whose JSONForms handler calls `.delay()`, which needs somewhere to

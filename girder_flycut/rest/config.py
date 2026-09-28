@@ -232,10 +232,19 @@ class ConfigRoutes:
         return FlycutConfig().filter(save_config_file(item, user, rendered_config), user)
 
     @access.user
-    @autoDescribeRoute(Description("Delete your editable draft.").param("id", "Draft ID", paramType="path"))
+    @autoDescribeRoute(
+        Description("Delete your editable draft.").modelParam(
+            "id",
+            "Draft ID",
+            model="flycutConfig",
+            plugin="flycut",
+            level=AccessType.WRITE,
+            paramType="path",
+            destName="item",
+        )
+    )
     @gated
-    def delete_draft(self, id, user):
-        item = FlycutConfig().load(id, user=user)
+    def delete_draft(self, item, user):
         # Claim only a draft, so a concurrent submission cannot be deleted.
         result = Item().collection.update_one(
             {"_id": item["_id"], "meta.flycut.status": "draft"}, {"$set": {"meta.flycut.status": "deleting"}}
@@ -249,4 +258,4 @@ class ConfigRoutes:
                 {"_id": item["_id"], "meta.flycut.status": "deleting"}, {"$set": {"meta.flycut.status": "draft"}}
             )
             raise
-        return {"deleted": id}
+        return {"deleted": str(item["_id"])}

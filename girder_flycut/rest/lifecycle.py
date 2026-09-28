@@ -47,12 +47,19 @@ class LifecycleRoutes:
 
     @access.user
     @autoDescribeRoute(
-        Description("Generate and store the LightBurn bundle.").param("id", "Configuration ID", paramType="path")
+        Description("Generate and store the LightBurn bundle.").modelParam(
+            "id",
+            "Configuration ID",
+            model="flycutConfig",
+            plugin="flycut",
+            level=AccessType.WRITE,
+            paramType="path",
+            destName="item",
+        )
     )
     @gated
     @stack_locked
-    def generate_config(self, id, user):
-        item = FlycutConfig().load(id, user=user)
+    def generate_config(self, item, user):
         if item["meta"]["flycut"].get("status") == "draft":
             raise RestException("Submit the draft before generating files.")
         if FlycutConfig().lifecycle(item) in {"generated", "registered"}:
@@ -67,7 +74,7 @@ class LifecycleRoutes:
         folder = None
         files = []
         try:
-            item = FlycutConfig().load(id, user=user)
+            item = FlycutConfig().load(item["_id"], user=user)
             if FlycutConfig().lifecycle(item) in {"generated", "registered"}:
                 return FlycutConfig().filter(item, user)
             raw_config = unpack(configuration(item))
@@ -115,16 +122,23 @@ class LifecycleRoutes:
             raise
         finally:
             Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta.flycut.busy": False}})
-        return FlycutConfig().filter(FlycutConfig().load(id, user=user), user)
+        return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)
 
     @access.user
     @autoDescribeRoute(
-        Description("Delete generated files and return to submitted.").param("id", "Configuration ID", paramType="path")
+        Description("Delete generated files and return to submitted.").modelParam(
+            "id",
+            "Configuration ID",
+            model="flycutConfig",
+            plugin="flycut",
+            level=AccessType.WRITE,
+            paramType="path",
+            destName="item",
+        )
     )
     @gated
     @stack_locked
-    def delete_files(self, id, user):
-        item = FlycutConfig().load(id, user=user)
+    def delete_files(self, item, user):
         if FlycutConfig().lifecycle(item) == "registered":
             raise RestException("Registered stacks cannot have their generated files deleted here.", code=409)
         for artifact in item["meta"]["flycut"].get("files", []):
@@ -142,16 +156,25 @@ class LifecycleRoutes:
                 "$unset": {"meta.flycut.files": "", "meta.flycut.folderId": "", "meta.flycut.generatedAt": ""},
             },
         )
-        return FlycutConfig().filter(FlycutConfig().load(id, user=user), user)
+        return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)
 
     @access.user
     @autoDescribeRoute(
-        Description("Register the generated stack as a child IGSN.").param("id", "Configuration ID", paramType="path")
+        Description("Register the generated stack as a child IGSN.").modelParam(
+            "id",
+            "Configuration ID",
+            model="flycutConfig",
+            plugin="flycut",
+            level=AccessType.WRITE,
+            paramType="path",
+            destName="item",
+        )
     )
     @gated
     @stack_locked
-    def register_config(self, id, user):
-        item = FlycutConfig().load(id, user=user)
+    def register_config(self, item, user):
+        # The id as the client sent it: what `flycutConfigId` has always held.
+        config_id = str(item["_id"])
         state = item["meta"]["flycut"]
         if FlycutConfig().lifecycle(item) != "registered" and not state.get("files"):
             raise RestException("Generate files before registering.")
@@ -188,14 +211,14 @@ class LifecycleRoutes:
         try:
             child_igsn = f"{parent['igsn']}-{config['run_params']['stackid']}"
             child = model.findOne({"igsn": child_igsn})
-            if child and str(child.get("flycutConfigId", "")) != id:
+            if child and str(child.get("flycutConfigId", "")) != config_id:
                 raise RestException("This stack IGSN already exists for another configuration.", code=409)
             if not child:
                 # Reserve this parent/suffix across workers before contacting the registry.
                 # The durable reservation intentionally survives uncertain registry failures.
                 reservations = Item().collection.database["flycut_registration"]
                 try:
-                    reservations.insert_one({"_id": child_igsn, "configId": id})
+                    reservations.insert_one({"_id": child_igsn, "configId": config_id})
                 except DuplicateKeyError as exc:
                     raise RestException(
                         "This IGSN has a previous registration attempt. "
@@ -222,7 +245,7 @@ class LifecycleRoutes:
                     },
                 )
                 child = model.load(result.inserted_ids[0], force=True, exc=True)
-                child["flycutConfigId"] = id
+                child["flycutConfigId"] = config_id
                 child = model.save(child)
             else:
                 model.requireAccess(child, user=user, level=AccessType.WRITE)
@@ -282,4 +305,4 @@ class LifecycleRoutes:
             )
         finally:
             Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta.flycut.busy": False}})
-        return FlycutConfig().filter(FlycutConfig().load(id, user=user), user)
+        return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)

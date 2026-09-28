@@ -55,12 +55,11 @@ class TemplateRoutes:
     @access.user
     @autoDescribeRoute(
         Description("Choose a LightBurn file from a portal item.")
-        .param("id", "Item ID", paramType="path")
+        .modelParam("id", "Item ID", model=Item, level=AccessType.READ, paramType="path")
         .param("filename", "Optional exact filename", default="")
     )
     @gated
-    def template_item(self, id, filename="", user=None):
-        item = Item().load(id, user=user, level=AccessType.READ, exc=True)
+    def template_item(self, item, filename="", user=None):
         files = [
             f
             for f in File().find({"itemId": item["_id"]})
