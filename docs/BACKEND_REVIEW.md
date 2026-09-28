@@ -87,7 +87,7 @@ configuration's rules belong — and each call site reads as intent:
 
 ```python
 FlycutConfig().setState(item, status="generated", files=..., generatedAt=...)
-FlycutConfig().claim(item, expect="draft", become="deleting")   # the CAS, returns bool
+FlycutConfig().claim(item, expect="draft", become="deleting")  # the CAS, returns bool
 ```
 
 The nine that stay are `lock()`, the two draft claims in `save_config` and
