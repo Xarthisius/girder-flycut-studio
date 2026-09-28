@@ -44,6 +44,9 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 `phase-6a-drop-vendor` (`F1`), `phase-6b-config-page` (`C6`, `E7`, `G1`) and
 `phase-6c-metadata` (`F3`).
 
+**`docs/BACKEND_REVIEW.md` is the working document for what is left on the Python side** —
+six items, none a bug, each measured. It is disposable; delete it when the last one lands.
+
 ### Where things stand
 
 Nothing is outstanding. `docs/CONVERSION_PLAN.md` keeps the issue register and the five
