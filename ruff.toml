@@ -21,7 +21,6 @@ exclude = [
     ".venv",
     "_build",
     "build",
-    "config_builder",
     "dist",
     "node_modules",
     "site-packages",

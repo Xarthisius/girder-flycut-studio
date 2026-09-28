@@ -27,18 +27,17 @@ function pugPlugin() {
 // Girder core is not bundled: it is the `girder` global the app injects before
 // plugin bundles load.
 //
-// The config sits at the repository root rather than beside the entry, which is
-// where girder's conventions put it. That was because two source trees once
-// shared one npm project; config_builder/ is gone and moving both into
-// web_client/ is the last of this phase's housekeeping.
+// This sits beside the entry, with the client's own package.json, because
+// girder's build_plugins.py looks for `<plugin>/girder_<name>/web_client/
+// package.json` and silently skips a plugin that has none.
 export default defineConfig({
     plugins: [pugPlugin()],
     build: {
-        outDir: resolve(__dirname, 'girder_flycut/web_client/dist'),
+        outDir: resolve(__dirname, 'dist'),
         emptyOutDir: true,
         sourcemap: !process.env.SKIP_SOURCE_MAPS,
         lib: {
-            entry: resolve(__dirname, 'girder_flycut/web_client/main.js'),
+            entry: resolve(__dirname, 'main.js'),
             name: 'GirderPluginFlycut',
             fileName: 'girder-plugin-flycut'
         },

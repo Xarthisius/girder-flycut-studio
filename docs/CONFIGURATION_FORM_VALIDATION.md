@@ -154,7 +154,9 @@ available stack IGSN. These are registration requirements, not form status check
 
 ## Implementation references
 
-- `config_builder/static/app.js`: form status, acknowledgement, colors, and imports.
+- `girder_flycut/web_client/core/assess.js`: the requirements and the six warnings.
+- `girder_flycut/web_client/core/validate.js`: the export gate and the status label.
+- `girder_flycut/web_client/views/StatusPanelView.js`: how both are reported.
 - `girder_flycut/client_wrapper.js`: draft saving, submission, and workflow selection.
 - `girder_flycut/validation.py`: server normalization, warnings, and generation validation.
 - `girder_flycut/rest.py`: access, lifecycle, size limits, and submission endpoints.
