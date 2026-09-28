@@ -6,8 +6,8 @@ measurements taken on 2026-09-27. **Delete this file when Phase 6 lands.**
 
 | | |
 |---|---|
-| **Closed** | 27 of 33. Phases 0–4 complete; Phase 5 steps 1 and 2 done. |
-| **Left** | 6 — `E4 E6` (Phase 5) and `C6 E7 F1 F3 G1` (Phase 6) |
+| **Closed** | 28 of 33. Phases 0–4 complete; Phase 5 steps 1–3 done. |
+| **Left** | 5 — `E6` (Phase 5) and `C6 E7 F1 F3 G1` (Phase 6) |
 | **Baseline** | PR #11 is merged. `E5` and `B4` landed on `phase-5a-imports-and-format`. |
 
 **Line numbers below predate `B4`.** The formatter rewrapped 18 files and grew
@@ -61,8 +61,8 @@ What it does *not* cover, so change these with care:
 
 ## Phase 5 — server-side alignment
 
-~~Step 1 (`E5`)~~ and ~~Step 2 (`B4`)~~ are done; they are kept below for the record.
-**Resume at Step 3.**
+~~Step 1 (`E5`)~~, ~~Step 2 (`B4`)~~ and ~~Step 3 (`E4`/`E2`)~~ are done; they are kept
+below for the record. **Resume at Step 4.**
 
 Four issues: `E5`, `B4`, `E4`/`E2`, `E6`. **Do them in that order.** Formatting before
 restructuring keeps the restructuring diff readable; hoisting imports before formatting
@@ -122,7 +122,15 @@ select list and to CI so they stay fixed. Right now `ruff.toml` selects `E4,E7,E
 
 Verify: `ruff check .`, `pytest tests`, and `git diff --stat` should be formatting only.
 
-### Step 3 — `E4` and `E2`: the model layer
+### ~~Step 3~~ — `E4` and `E2`: the model layer  ✅
+
+**Done.** `FlycutConfig` subclasses `Item` rather than standing beside it. One correction
+to the table below: `validate()` is reachable only on the creation path, which 5b routed
+through the model for that reason. Every other configuration write is a partial
+`update_one` with `$set`/`$unset` on nested `meta.flycut` fields and bypasses the model
+entirely; converting those is not part of `E4`, and several are deliberate atomic field
+flips whose concurrency a whole-document save would not preserve. `rest.py` is 684 lines
+now, and `tests/test_models.py` adds 14 tests.
 
 `FlycutConfig`, registered with `ModelImporter.registerModel`. It absorbs the logic
 currently spread across five methods of the REST resource:
@@ -152,7 +160,7 @@ pickers still populate. Run both.
 
 ### Step 4 — `E6`: split `rest.py`
 
-608 lines, 18 routes. Into `rest/config.py`, `rest/template.py`, `rest/settings.py`, per
+684 lines, 18 routes. Into `rest/config.py`, `rest/template.py`, `rest/settings.py`, per
 the plan. Two things go with it:
 
 - **The 14 `self.gate()` calls become one decorator.** `gate()` checks that the dashboard
