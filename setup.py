@@ -12,8 +12,12 @@ setup(
     description="Flyer Studio configuration, generation, and IGSN registration for Girder",
     long_description=README,
     long_description_content_type="text/markdown",
-    author="Kacper Kowalik",
-    author_email="xarthisius.kk@gmail.com",
+    # Max Berner wrote Flyer Studio (e33a448, "Initial release: Flyer Studio
+    # 1.0.0"); the Girder-plugin conversion since is Kacper Kowalik's.
+    author="Max Berner",
+    author_email="bernermaximus@gmail.com",
+    maintainer="Kacper Kowalik",
+    maintainer_email="xarthisius.kk@gmail.com",
     url="https://github.com/Xarthisius/girder-flycut-studio",
     project_urls={
         "Source": "https://github.com/Xarthisius/girder-flycut-studio",
