@@ -18,6 +18,7 @@ from ..materials import foil_materials
 from ..portal_templates import load_portal_template
 from ..schema import unpack
 from .catalog import CATALOG
+from .gate import gated
 
 
 class TemplateRoutes:
@@ -25,8 +26,8 @@ class TemplateRoutes:
 
     @access.user
     @autoDescribeRoute(Description("Template layout.").param("id", "Template name", paramType="path"))
-    def template(self, id):
-        user = self.gate()
+    @gated
+    def template(self, id, user):
         if id.startswith("girder:"):
             return self.portal_template(id, user)[0]
         if id not in CATALOG["details"]:
@@ -57,8 +58,8 @@ class TemplateRoutes:
         .param("id", "Item ID", paramType="path")
         .param("filename", "Optional exact filename", default="")
     )
-    def template_item(self, id, filename=""):
-        user = self.gate()
+    @gated
+    def template_item(self, id, filename="", user=None):
         item = Item().load(id, user=user, level=AccessType.READ, exc=True)
         files = [
             f
@@ -75,8 +76,8 @@ class TemplateRoutes:
     @autoDescribeRoute(
         Description("Import Excel laser parameters.").jsonParam("payload", "Base64 workbook", requireObject=True)
     )
+    @gated
     def import_excel(self, payload):
-        self.gate()
         try:
             encoded = payload.get("data", "")
             if not isinstance(encoded, str) or len(encoded) > 7 * 1024 * 1024:

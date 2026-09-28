@@ -22,6 +22,7 @@ from ..schema import pack, unpack
 from ..storage import draft_root, promote, remove_config
 from ..validation import builder_warnings, normalize_builder_config
 from .catalog import CATALOG
+from .gate import gated
 from .locking import stack_locked
 
 
@@ -38,8 +39,8 @@ class ConfigRoutes:
 
     @access.user
     @autoDescribeRoute(Description("Stack reuse rules for the current user."))
-    def stack_states(self):
-        user = self.gate()
+    @gated
+    def stack_states(self, user):
         result = {}
         for item in Item().find({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}}):
             stack = str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip().upper()
@@ -55,8 +56,8 @@ class ConfigRoutes:
 
     @access.user
     @autoDescribeRoute(Description("Configuration catalog and signed-in operator."))
-    def options(self):
-        user = self.gate()
+    @gated
+    def options(self, user):
         return {
             "workspaceFolderId": studio_settings.policy()["workspace_folder_id"],
             "materials": foil_materials(user),
@@ -67,8 +68,8 @@ class ConfigRoutes:
 
     @access.user
     @autoDescribeRoute(Description("List your latest 100 configurations."))
-    def configs(self):
-        user = self.gate()
+    @gated
+    def configs(self, user):
         workspace_id = studio_settings.policy()["workspace_folder_id"]
         if not workspace_id:
             return []
@@ -81,13 +82,14 @@ class ConfigRoutes:
 
     @access.user
     @autoDescribeRoute(Description("Stack IDs with one of your submitted configurations."))
-    def submitted_stacks(self):
-        return self.submitted_stack_ids(self.gate())
+    @gated
+    def submitted_stacks(self, user):
+        return self.submitted_stack_ids(user)
 
     @access.user
     @autoDescribeRoute(Description("Lowest unused five-character Crockford stack ID."))
+    @gated
     def next_stack_id(self):
-        self.gate()
         used = {
             str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip().upper()
             for item in Item().find(CONFIG_QUERY)
@@ -125,9 +127,9 @@ class ConfigRoutes:
         .param("submit", "Finalize the configuration", dataType="boolean", default=False)
         .param("validated", "Acknowledge validation warnings", dataType="boolean", default=False)
     )
+    @gated
     @stack_locked
-    def save_config(self, config, name="", id="", submit=False, validated=False):
-        user = self.gate()
+    def save_config(self, config, name="", id="", submit=False, validated=False, user=None):
         if len(json.dumps(config, allow_nan=False).encode()) > 256 * 1024:
             raise RestException("Configuration exceeds 256 KB.")
         rendered_config = copy.deepcopy(config) if "run_parameters" in config else pack(config)
@@ -231,8 +233,8 @@ class ConfigRoutes:
 
     @access.user
     @autoDescribeRoute(Description("Delete your editable draft.").param("id", "Draft ID", paramType="path"))
-    def delete_draft(self, id):
-        user = self.gate()
+    @gated
+    def delete_draft(self, id, user):
         item = FlycutConfig().load(id, user=user)
         # Claim only a draft, so a concurrent submission cannot be deleted.
         result = Item().collection.update_one(

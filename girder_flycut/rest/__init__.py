@@ -3,16 +3,14 @@
 One `Resource` composed from four route mixins rather than one 686-line class:
 `SettingsRoutes` (administrative policy), `TemplateRoutes` (which template and
 what is in it), `ConfigRoutes` (listing, stack IDs, saving) and
-`LifecycleRoutes` (generate, delete files, register).
+`LifecycleRoutes` (generate, delete files, register), over `GateMixin`, which
+supplies the dashboard check every route goes through.
 """
 
 from girder.api.rest import Resource
-from girder.constants import AccessType
-from girder.exceptions import RestException
-from girder_dashboards.models.dashboard import Dashboard
 
-from .. import KEY
 from .config import ConfigRoutes
+from .gate import GateMixin
 from .lifecycle import LifecycleRoutes
 from .settings import SettingsRoutes
 from .template import TemplateRoutes
@@ -20,7 +18,7 @@ from .template import TemplateRoutes
 __all__ = ["Flycut"]
 
 
-class Flycut(SettingsRoutes, TemplateRoutes, ConfigRoutes, LifecycleRoutes, Resource):
+class Flycut(SettingsRoutes, TemplateRoutes, ConfigRoutes, LifecycleRoutes, GateMixin, Resource):
     def __init__(self):
         super().__init__()
         self.resourceName = "flycut"
@@ -41,10 +39,3 @@ class Flycut(SettingsRoutes, TemplateRoutes, ConfigRoutes, LifecycleRoutes, Reso
         self.route("POST", ("config", ":id", "generate"), self.generate_config)
         self.route("POST", ("config", ":id", "register"), self.register_config)
         self.route("DELETE", ("config", ":id", "files"), self.delete_files)
-
-    def gate(self):
-        user = self.getCurrentUser()
-        doc = Dashboard().findOne({"key": KEY})
-        if not doc or not doc.get("enabled") or not Dashboard().hasAccess(doc, user, AccessType.READ):
-            raise RestException("This dashboard is disabled or inaccessible.", code=403)
-        return user

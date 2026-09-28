@@ -30,6 +30,7 @@ from ..models import FlycutConfig
 from ..registration import foil_identifiers, is_test_run, stack_metadata
 from ..schema import unpack
 from ..validation import normalize_config
+from .gate import gated
 from .locking import stack_locked
 
 
@@ -48,9 +49,9 @@ class LifecycleRoutes:
     @autoDescribeRoute(
         Description("Generate and store the LightBurn bundle.").param("id", "Configuration ID", paramType="path")
     )
+    @gated
     @stack_locked
-    def generate_config(self, id):
-        user = self.gate()
+    def generate_config(self, id, user):
         item = FlycutConfig().load(id, user=user)
         if item["meta"]["flycut"].get("status") == "draft":
             raise RestException("Submit the draft before generating files.")
@@ -120,9 +121,9 @@ class LifecycleRoutes:
     @autoDescribeRoute(
         Description("Delete generated files and return to submitted.").param("id", "Configuration ID", paramType="path")
     )
+    @gated
     @stack_locked
-    def delete_files(self, id):
-        user = self.gate()
+    def delete_files(self, id, user):
         item = FlycutConfig().load(id, user=user)
         if FlycutConfig().lifecycle(item) == "registered":
             raise RestException("Registered stacks cannot have their generated files deleted here.", code=409)
@@ -147,9 +148,9 @@ class LifecycleRoutes:
     @autoDescribeRoute(
         Description("Register the generated stack as a child IGSN.").param("id", "Configuration ID", paramType="path")
     )
+    @gated
     @stack_locked
-    def register_config(self, id):
-        user = self.gate()
+    def register_config(self, id, user):
         item = FlycutConfig().load(id, user=user)
         state = item["meta"]["flycut"]
         if FlycutConfig().lifecycle(item) != "registered" and not state.get("files"):
