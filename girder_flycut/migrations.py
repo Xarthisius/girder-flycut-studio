@@ -9,7 +9,9 @@ Two move data that older releases wrote into `meta`, where girder-jsonforms'
   they can be sorted and range-queried as the timestamps they are.
 
 The third drops a collection: the per-stack mutex moved from Mongo to Redis,
-leaving `flycut_stack_locks` behind holding nothing but expired locks.
+leaving `flycut_stack_locks` behind holding nothing but expired locks. The
+fourth removes `meta.flycut.action`, which recorded which operation held the
+`busy` flag and was read by nothing, server or client.
 
 Each data step is a single `update_many` guarded by the shape it is about to
 change, so running it twice is a no-op and a half-finished run simply resumes.
@@ -90,6 +92,21 @@ def coerce_lifecycle_timestamps():
     return converted
 
 
+def drop_dead_lifecycle_state():
+    """Remove `meta.flycut.action`, which was written but never read.
+
+    It named the operation holding `busy` -- "generate" or "register" -- and
+    nothing anywhere consulted it. `busy` itself stays: it is the
+    compare-and-swap that still refuses a second generation when the stack
+    lock has expired under its holder. See `FlycutConfig.claimBusy`.
+    """
+    return (
+        Item()
+        .collection.update_many({"meta.flycut.action": {"$exists": True}}, {"$unset": {"meta.flycut.action": ""}})
+        .modified_count
+    )
+
+
 def drop_stack_lock_collection():
     """Remove the Mongo mutex the Redis lock replaced.
 
@@ -108,15 +125,23 @@ def run():
     """Apply every migration. Idempotent; safe to call on each load."""
     moved, stale = move_config_out_of_meta()
     converted = coerce_lifecycle_timestamps()
+    actions = drop_dead_lifecycle_state()
     dropped = drop_stack_lock_collection()
     if dropped:
         logger.info("flycut: dropped the obsolete %s collection", STACK_LOCK_COLLECTION)
-    if moved or stale or converted:
+    if moved or stale or converted or actions:
         logger.info(
             "flycut: migrated %d configuration snapshot(s) out of meta, cleaned %d stale copy/copies, "
-            "converted %d timestamp field(s) to dates",
+            "converted %d timestamp field(s) to dates, dropped %d dead action field(s)",
             moved,
             stale,
             converted,
+            actions,
         )
-    return {"moved": moved, "stale": stale, "timestamps": converted, "droppedStackLocks": dropped}
+    return {
+        "moved": moved,
+        "stale": stale,
+        "timestamps": converted,
+        "actions": actions,
+        "droppedStackLocks": dropped,
+    }

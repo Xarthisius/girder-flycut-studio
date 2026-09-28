@@ -67,7 +67,7 @@ def test_set_state_reads_the_document_back_before_writing(server, enabled, user)
     """
     item = _registered(server, user)
     stale = copy.deepcopy(item)
-    assert FlycutConfig().claimBusy(item, "generate")
+    assert FlycutConfig().claimBusy(item)
     FlycutConfig().setState(stale, overwriteSafe=False)
 
     after = Item().load(item["_id"], force=True)
@@ -99,10 +99,11 @@ def test_set_state_on_a_deleted_configuration_is_a_no_op(server, enabled, user):
 
 def test_claim_busy_is_a_compare_and_swap(server, enabled, user):  # noqa: F811
     item = _registered(server, user)
-    assert FlycutConfig().claimBusy(item, "generate") is True
-    assert FlycutConfig().claimBusy(item, "register") is False
+    assert FlycutConfig().claimBusy(item) is True
+    assert FlycutConfig().claimBusy(item) is False
     state = Item().load(item["_id"], force=True)["meta"]["flycut"]
-    assert state["busy"] is True and state["action"] == "generate"
+    assert state["busy"] is True
+    assert "action" not in state, "the lifecycle stage was written but never read; it is gone"
 
 
 def test_claim_status_only_moves_from_what_it_expects(server, enabled, user):  # noqa: F811

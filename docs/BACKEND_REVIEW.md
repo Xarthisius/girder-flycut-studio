@@ -12,8 +12,8 @@ the code. Line numbers drift, so each item names an anchor instead.
 |---|---|
 | **Python** | 2,628 lines across 27 modules |
 | **Tests** | 68 pytest at 88%, five Node suites, an 89-check browser harness |
-| **Done** | everything but the two smallest — PR #21, #22, items 1–5 |
-| **Left** | two. Neither is a bug; one is dead weight, one is prose |
+| **Done** | everything but the last — PR #21, #22, items 1–6 |
+| **Left** | one. Not a bug; it is prose |
 
 ---
 
@@ -320,7 +320,23 @@ re-derived by hand in four modules.
 
 ---
 
-## 6. Dead state, and two overlapping mutexes
+## 6. Dead state, and two overlapping mutexes  *(done — `drop-dead-lifecycle-state`)*
+
+**Landed, and it was only `action` in the end**, as this item concluded.
+`meta.flycut.action` recorded which operation held `busy` -- "generate" or
+"register" -- and nothing read it, here or in the client; `lock()` no longer takes
+the argument, and a migration unsets the field on stored documents.
+
+`busy` and `lock()` stay, and the reason is now written where the next reader will
+find it: on `FlycutConfig.claimBusy`, which is the only thing that touches either.
+It is not visible from the call site, which is the whole problem this item named.
+
+The payload overlap is left alone deliberately. `filter()` still reports `busy` to
+the client, because it spreads the whole lifecycle blob -- but nothing in the client
+reads it, and the shell's own `busy` lives on the workflow model rather than on a
+configuration record, so the two never meet. Removing it from the response would be
+an API change for a name collision that does not actually collide; it is noted in
+`claimBusy` instead.
 
 `meta.flycut.busy` is written but **never read** — except by its own
 compare-and-swap in `lock()`. `meta.flycut.action` is **never read anywhere**,
@@ -376,7 +392,7 @@ One per item, in this order. The first two are worth doing; the rest are tidying
 | ~~`perf-listing-n1`~~ | ~~2~~ | **done** — the largest cost a user can feel |
 | ~~`model-owns-its-writes`~~ | ~~3 + 5~~ | **done** — the stack-ID helper fell out of the same work |
 | ~~`split-save-config`~~ | ~~4~~ | **done** — easier once the model owned the writes |
-| `drop-dead-lifecycle-state` | 6 | just `action` now; see the note there |
+| ~~`drop-dead-lifecycle-state`~~ | ~~6~~ | **done** — just `action`, as the note there predicted |
 | `tidy-validators` | 7 | independent, can go any time |
 
 `redis-stack-lock` wants a Redis service in the pytest job. CI already
