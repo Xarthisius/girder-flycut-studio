@@ -12,7 +12,11 @@ from test_dashboard import configuration
 
 from girder_flycut.models import FlycutConfig, StackLock
 
-pytestmark = pytest.mark.plugin("flycut")
+# Both plugins, deliberately. Loading only flycut leaves girder-jsonforms'
+# event bindings unregistered -- `coerce_metadata_dates` on `model.item.save`
+# above all -- so a whole class of production behaviour is invisible here. The
+# configuration snapshot depends on those hooks being present.
+pytestmark = [pytest.mark.plugin("flycut"), pytest.mark.plugin("jsonforms")]
 
 
 def _config(server, user, stack="F100"):
