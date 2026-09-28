@@ -1,0 +1,17 @@
+// Design tokens, as custom properties rather than Stylus variables: the
+// laser cards and the preview set --layer and --swatch per element from
+// JavaScript, so the whole palette has to be readable at runtime.
+// unquote() because Stylus evaluates the right-hand side and a custom
+// property is opaque data -- it has to reach the browser as written.
+.g-flycut-dashboard
+  &
+    --ink unquote('#16221f')
+    --muted unquote('#66736f')
+    --line unquote('#d9dfdc')
+    --paper unquote('#f5f6f3')
+    --white unquote('#fff')
+    --green unquote('#235c4e')
+    --mint unquote('#dcebe5')
+    --orange unquote('#ef6c3c')
+    --danger unquote('#bd3d32')
+    --shadow unquote('0 18px 50px rgba(23,36,32,.09)')

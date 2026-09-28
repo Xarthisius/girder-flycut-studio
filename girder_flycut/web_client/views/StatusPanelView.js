@@ -13,6 +13,7 @@
 import { statusLabel } from '../core/validate.js';
 import statusPanelTemplate from '../templates/statusPanel.pug';
 import { escapeHtml } from '../util.js';
+import '../stylesheets/statusPanel.styl';
 
 const View = girder.views.View;
 /** How long a linked-to control stays highlighted after being jumped to. */

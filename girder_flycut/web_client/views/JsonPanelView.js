@@ -5,6 +5,7 @@
  * the server would have accepted, not a draft that happens to serialise.
  */
 import jsonPanelTemplate from '../templates/jsonPanel.pug';
+import '../stylesheets/jsonPanel.styl';
 
 const View = girder.views.View;
 

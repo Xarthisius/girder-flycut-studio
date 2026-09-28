@@ -13,6 +13,7 @@
  * button greys out would throw away the user's selection mid-interaction.
  */
 import { escapeHtml } from '../util.js';
+import '../stylesheets/pickerScreen.styl';
 
 const View = girder.views.View;
 

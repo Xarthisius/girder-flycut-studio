@@ -13,6 +13,7 @@
  */
 import adminSettingsTemplate from '../templates/adminSettings.pug';
 import { escapeHtml, request } from '../util.js';
+import '../stylesheets/adminSettings.styl';
 
 const View = girder.views.View;
 const ROLES = ['creators', 'owners', 'editors', 'viewers'];

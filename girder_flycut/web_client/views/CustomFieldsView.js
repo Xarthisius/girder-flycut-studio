@@ -11,6 +11,7 @@
 import customFieldRowTemplate from '../templates/customFieldRow.pug';
 import customFieldsTemplate from '../templates/customFields.pug';
 import { escapeHtml } from '../util.js';
+import '../stylesheets/customFields.styl';
 
 const View = girder.views.View;
 /** More than a few suggestions stops being a suggestion. */

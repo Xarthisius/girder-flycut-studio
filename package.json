@@ -8,7 +8,7 @@
   "scripts": {
     "build": "npm run check-version && vite build",
     "dev": "vite build --watch",
-    "lint": "eslint . && pug-lint girder_flycut",
+    "lint": "eslint . && pug-lint girder_flycut && NODE_OPTIONS=--no-deprecation stylelint \"girder_flycut/**/*.styl\"",
     "format": "eslint --fix .",
     "test": "node tests/core.mjs && node tests/status.mjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs",
     "check-version": "node girder_flycut/web_client/build/check-version.mjs"

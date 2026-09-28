@@ -37,22 +37,20 @@ jobs:
       - name: Lint Python
         run: ruff check .
 
-      # eslint over every browser source, then pug-lint over every template.
-      # stylelint joins when the stylesheet becomes Stylus.
+      # eslint over every browser source, pug-lint over every template, and
+      # stylelint over every stylesheet.
       - name: Lint the browser sources
         run: npm run lint
 
-      # Generates the three derived sources from config_builder/static/ and
-      # bundles them with Vite. The generator asserts a match count for every
-      # literal substitution, so markup that moves fails here rather than
-      # silently dropping a control. The bundle is no longer committed, so
-      # there is nothing to check for staleness.
+      # Vite compiles the Pug templates to client-side functions and the
+      # Stylus to one scoped stylesheet. The bundle is not committed, so there
+      # is nothing to check for staleness.
       - name: Build the browser bundle
         run: npm run build
 
-      # bundle.cjs loads the built artifact against a stub girder global. node
-      # --check proves it parses; only running it proves build_dashboard.py put
-      # the pieces in the right places.
+      # bundle.cjs loads the built artifact against a stub girder global, which
+      # is what proves every module reached it and that nothing needs a DOM at
+      # evaluation.
       - name: Frontend tests
         run: |
           node tests/core.mjs

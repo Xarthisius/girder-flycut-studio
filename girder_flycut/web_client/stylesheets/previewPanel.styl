@@ -1,0 +1,118 @@
+.g-flycut-dashboard
+  .preview-head
+    height 67px
+    padding 14px 18px
+    border-bottom 1px solid var(--line)
+    display flex
+    justify-content space-between
+    align-items center
+
+  .preview-head>div:first-child
+    display flex
+    flex-direction column
+
+  .preview-head span
+    font-size 8px
+    letter-spacing 0.13em
+    color var(--muted)
+
+  .preview-head strong
+    font-size 13px
+    margin-top 2px
+
+  .zoom-control
+    display flex
+    align-items center
+    gap 8px
+
+  .zoom-control button
+    width 25px
+    height 25px
+    border 1px solid var(--line)
+    background #fff
+    border-radius 5px
+    cursor pointer
+
+  .zoom-control span
+    letter-spacing 0
+    font-size 9px
+    width 34px
+    text-align center
+
+  .preview-stage
+    height 520px
+    background-color #e9ece9
+    background-image linear-gradient(#d8ddd9 1px,transparent 1px),linear-gradient(90deg,#d8ddd9 1px,transparent 1px)
+    background-size 20px 20px
+    display grid
+    place-items center
+    overflow hidden
+
+  .canvas
+    width 430px
+    height 430px
+    background #fafbf9
+    border 1px solid #c8d0cc
+    position relative
+    box-shadow 0 8px 22px rgba(26,42,36,0.1)
+    transition transform 0.15s
+
+  .empty-preview
+    height 100%
+    display grid
+    place-items center
+    color var(--muted)
+    font-size 12px
+
+  .flyer
+    position absolute
+    border 1.5px solid var(--layer)
+    border-radius 50%
+    background unquote('color-mix(in srgb,var(--layer) 9%,white)')
+    display grid
+    place-items center
+    color var(--layer)
+    font-size 7px
+    font-weight 750
+    min-width 14px
+    min-height 14px
+
+  .legend
+    height 48px
+    padding 0 18px
+    display flex
+    align-items center
+    justify-content space-between
+    color var(--muted)
+    font-size 10px
+
+  .legend-dot
+    width 7px
+    height 7px
+    border-radius 50%
+    display inline-block
+    background var(--green)
+    margin-right 5px
+
+  .flyer
+    font-size 8px
+    font-weight 800
+
+  .flyer.unconfigured
+    border-style dashed
+    background #f1f2f1
+    color #68736f
+
+  .flyer
+    background unquote('var(--material,color-mix(in srgb,var(--layer) 9%,white))')
+
+  @media (max-width650px)
+    .legend
+      height auto
+      min-height 48px
+      gap 12px
+      flex-wrap wrap
+      padding 12px
+
+  .legend
+    justify-content flex-end

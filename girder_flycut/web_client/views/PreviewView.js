@@ -9,6 +9,7 @@
 import { previewLayout } from '../core/preview.js';
 import previewPanelTemplate from '../templates/previewPanel.pug';
 import { escapeHtml } from '../util.js';
+import '../stylesheets/previewPanel.styl';
 
 const View = girder.views.View;
 const EMPTY = '<div class="empty-preview">Choose a template to see its flyer layout.</div>';

@@ -15,6 +15,7 @@
 import { LASER_LIMIT } from '../core/laser.js';
 import laserCardTemplate from '../templates/laserCard.pug';
 import laserParametersTemplate from '../templates/laserParameters.pug';
+import '../stylesheets/laserList.styl';
 
 const View = girder.views.View;
 
