@@ -127,7 +127,7 @@ def test_running_twice_changes_nothing(server, enabled, user):  # noqa: F811
     after_first = Item().load(item["_id"], force=True)
 
     second = migrations.run()
-    assert second == {"moved": 0, "stale": 0, "timestamps": 0}
+    assert second == {"moved": 0, "stale": 0, "timestamps": 0, "droppedStackLocks": False}
     assert Item().load(item["_id"], force=True) == after_first
 
 
@@ -142,3 +142,16 @@ def test_leaves_unrelated_items_alone(server, enabled, user):  # noqa: F811
     after = Item().load(other["_id"], force=True)
     assert after["meta"]["config"] == {"someone": "else"}
     assert CONFIG_FIELD not in after
+
+
+def test_drops_the_mongo_stack_lock_collection(server, enabled, user):  # noqa: F811
+    """The mutex moved to Redis, so its collection is left holding expired locks."""
+    database = Item().collection.database
+    database[migrations.STACK_LOCK_COLLECTION].insert_one({"_id": "F100", "acquired": datetime.datetime.now()})
+    assert migrations.STACK_LOCK_COLLECTION in database.list_collection_names()
+
+    assert migrations.run()["droppedStackLocks"] is True
+    assert migrations.STACK_LOCK_COLLECTION not in database.list_collection_names()
+
+    # Dropping what is not there is a no-op, so every later load is cheap.
+    assert migrations.run()["droppedStackLocks"] is False

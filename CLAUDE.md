@@ -44,6 +44,11 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 `phase-6a-drop-vendor` (`F1`), `phase-6b-config-page` (`C6`, `E7`, `G1`) and
 `phase-6c-metadata` (`F3`).
 
+**`docs/BACKEND_REVIEW.md` is the working document for what is left on the Python side** —
+seven items, each measured. Item 1, the only correctness one, landed on
+`redis-stack-lock`; six are left, none a bug. It is disposable; delete it when the last
+one lands.
+
 ### Where things stand
 
 Nothing is outstanding. `docs/CONVERSION_PLAN.md` keeps the issue register and the five
@@ -62,7 +67,7 @@ What Phase 6 changed, in case it is not obvious from the tree:
 - **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs a view
   and sets its `el` but never calls `render()`.
 
-`pytest tests` is 56 tests at 88% coverage; `node test/browser/verify.cjs` is 89 checks
+`pytest tests` is 72 tests at 88% coverage; `node test/browser/verify.cjs` is 89 checks
 and is the only thing that renders the UI.
 
 The conventions the client settled on, which anything added to it should follow:
@@ -139,6 +144,13 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
   enqueue even though the task returns early without `AIMD_PORTAL_TOKEN`.
   **Every Girder deployment has a broker** — core needs one to delete a folder
   (`girder/api/v1/folder.py:311`).
+- **The per-stack mutex is a Redis lock, and it fails closed.** `rest/locking.py` wraps
+  `redis-py`'s own `Lock` — which is what makes the release ownership-checked — over the
+  same `GIRDER_NOTIFICATION_REDIS_URL` Girder core publishes notifications through. An
+  unreachable Redis is a 503, deliberately, and deliberately unlike
+  `girder_jsonforms.lib.locks.distributed_lock`, which logs and proceeds. So **pytest
+  needs a real Redis**, where before it only wanted one for girder-jsonforms' load-time
+  lock. CI's pytest job already runs one.
 - **pytest has no broker and must not need one.** It uses `pytest_girder`'s
   `eagerWorkerTasks` fixture, which runs tasks inline. Girder core tests its own
   `deleteFolderTask` the same way.
@@ -168,8 +180,7 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 girder_flycut/
   __init__.py            FlycutPlugin.load() — registers the models, the dashboard and
                          the REST resource
-  models/                FlycutConfig (an Item subclass) and StackLock, both registered
-                         with ModelImporter
+  models/                FlycutConfig, an Item subclass, registered with ModelImporter
   rest/                  17 routes under /api/v1/flycut, as four mixins over GateMixin —
                          settings, template, config, lifecycle — plus gate, locking, catalog
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
@@ -220,6 +231,9 @@ anything touching the UI.
 
 ## Traps
 
+- **`ruff format` reaches into Markdown.** It formats Python inside fenced code blocks in
+  `.md` files too, so a docs-only change can fail the lint gate. `ruff check .` does not
+  catch it — run `ruff format --check .` as well, which is what CI does.
 - **A pytest suite must name every plugin whose events it depends on.**
   `@pytest.mark.plugin` markers stack, and pytest_girder loads only what they name — so
   `plugin("flycut")` alone leaves girder-jsonforms' bindings unregistered and a whole

@@ -8,6 +8,5 @@ workspace-containment rules one home.
 """
 
 from .config import FlycutConfig
-from .lock import StackLock
 
-__all__ = ["FlycutConfig", "StackLock"]
+__all__ = ["FlycutConfig"]

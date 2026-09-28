@@ -78,11 +78,11 @@ jobs:
         image: mongo:4.4
         ports:
           - 27017:27017
-      # girder-jsonforms takes a Redis lock while ensuring its projects
-      # collection at load time. It logs and proceeds when Redis is missing,
-      # but its own CI runs one, so match that rather than relying on the
-      # fallback path. Note there is deliberately no broker for the pytest job
-      # -- see the eagerWorkerTasks note in tests/test_api.py.
+      # Required, not a convenience: the per-stack mutex is a Redis lock and
+      # fails closed, so tests/test_locks.py needs a real one. (girder-jsonforms
+      # also takes a Redis lock at load time, but that one logs and proceeds.)
+      # Note there is deliberately no broker for the pytest job -- see the
+      # eagerWorkerTasks note in tests/test_api.py.
       redis:
         image: redis:7
         ports:

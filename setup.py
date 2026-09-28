@@ -52,6 +52,11 @@ setup(
         # inverse_relation_type / child_titles arguments, which registering a
         # stack as a child deposition needs. See docs/JSONFORMS_COMPATIBILITY.md.
         "girder-jsonforms>=2.1.1",
+        # The per-stack mutex is redis-py's own lock. Girder core already
+        # depends on this and imports it at module scope, so it is always
+        # installed; declared here because `rest/locking.py` imports it
+        # directly rather than inheriting it.
+        "redis",
     ],
     entry_points={"girder.plugin": ["flycut = girder_flycut:FlycutPlugin"]},
 )

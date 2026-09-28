@@ -1,16 +1,19 @@
 """One-time document migrations, run at plugin load.
 
-Both of these move data that older releases wrote into `meta`, where
-girder-jsonforms' `coerce_metadata_dates` handler reaches it:
+Two move data that older releases wrote into `meta`, where girder-jsonforms'
+`coerce_metadata_dates` handler reaches it:
 
 * the configuration snapshot, out of `meta.config` (and the older
   `meta.flycut.config`) and into a top-level field no handler touches;
 * the four lifecycle timestamps, from ISO-8601 strings into BSON dates, so
   they can be sorted and range-queried as the timestamps they are.
 
-Every step is expressed as a single `update_many` guarded by the shape it is
-about to change, so running it twice is a no-op and a half-finished run simply
-resumes. Nothing here may abort the plugin load -- see `FlycutPlugin._guard`.
+The third drops a collection: the per-stack mutex moved from Mongo to Redis,
+leaving `flycut_stack_locks` behind holding nothing but expired locks.
+
+Each data step is a single `update_many` guarded by the shape it is about to
+change, so running it twice is a no-op and a half-finished run simply resumes.
+Nothing here may abort the plugin load -- see `FlycutPlugin._guard`.
 """
 
 import logging
@@ -34,6 +37,10 @@ TIMESTAMPS = (
     "meta.flycut.machinedAt",
     "meta.flycut.registration.registeredAt",
 )
+
+# The Mongo mutex's collection, named here rather than imported: the model
+# that owned it is gone, and this is the last thing that needs to know.
+STACK_LOCK_COLLECTION = "flycut_stack_locks"
 
 # A configuration in a pre-migration layout: it has flycut state, it has no
 # snapshot at the new location, and it has one at an old one.
@@ -83,10 +90,27 @@ def coerce_lifecycle_timestamps():
     return converted
 
 
+def drop_stack_lock_collection():
+    """Remove the Mongo mutex the Redis lock replaced.
+
+    Nothing writes to it any more, and every document it can still hold is a
+    lock whose 900-second TTL has long since passed. Dropping a collection
+    that is not there is a no-op, so this is safe on every later load.
+    """
+    items = Item().collection
+    if STACK_LOCK_COLLECTION not in items.database.list_collection_names():
+        return False
+    items.database.drop_collection(STACK_LOCK_COLLECTION)
+    return True
+
+
 def run():
     """Apply every migration. Idempotent; safe to call on each load."""
     moved, stale = move_config_out_of_meta()
     converted = coerce_lifecycle_timestamps()
+    dropped = drop_stack_lock_collection()
+    if dropped:
+        logger.info("flycut: dropped the obsolete %s collection", STACK_LOCK_COLLECTION)
     if moved or stale or converted:
         logger.info(
             "flycut: migrated %d configuration snapshot(s) out of meta, cleaned %d stale copy/copies, "
@@ -95,4 +119,4 @@ def run():
             stale,
             converted,
         )
-    return {"moved": moved, "stale": stale, "timestamps": converted}
+    return {"moved": moved, "stale": stale, "timestamps": converted, "droppedStackLocks": dropped}
