@@ -10,28 +10,24 @@ from girder.utility import JsonEncoder
 from .schema import unpack
 
 
-def normalize_config(config, user, catalog, submitted=False):
-    if not isinstance(config, dict):
-        raise ValueError("Configuration must be an object.")
-    if len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
-        raise ValueError("Configuration exceeds 256 KB.")
-    config = unpack(config)
+def _validate_run_params(config, user, catalog, submitted):
+    """The stack, the catalog references, and whose configuration this is."""
     run = config.get("run_params")
     if not isinstance(run, dict):
         raise ValueError("Missing run parameters.")
     stack = run.get("stackid", "")
-    valid_stack = isinstance(stack, str) and bool(re.fullmatch(r"(?:[0-9A-HJKMNP-TV-Z]{5}|F[0-9]{3,4})", stack))
-    if not valid_stack:
+    if not isinstance(stack, str) or not re.fullmatch(r"(?:[0-9A-HJKMNP-TV-Z]{5}|F[0-9]{3,4})", stack):
         raise ValueError("Stack ID must match F###, F####, or five uppercase Crockford Base32 characters.")
     for field, collection in [("foil_material", "materials"), ("template", "templates")]:
         if run.get(field) not in {entry["id"] for entry in catalog[collection]}:
             raise ValueError(f"Choose a valid {field}.")
+    # A submitted configuration keeps the operator it recorded; anything still
+    # being edited belongs to whoever is editing it.
     run["operator"] = (run.get("operator") or user["login"]) if submitted else user["login"]
-    config["createdBy"] = str(user["_id"])
-    assignment = config.get("laser_assignment")
-    repeat, wraparound = assignment_options(assignment)
-    config["laser_assignment"] = {"repeat": repeat, "wraparound": wraparound}
-    lasers = config.get("laser_params")
+
+
+def _validate_lasers(lasers):
+    """Between one and 28 layers, each a distinct colour with finite settings."""
     if not isinstance(lasers, list) or not 1 <= len(lasers) <= 28:
         raise ValueError("Provide between 1 and 28 laser settings.")
     colors = set()
@@ -54,13 +50,49 @@ def normalize_config(config, user, catalog, submitted=False):
                 raise ValueError(f"Laser {field} must be a finite nonnegative number.")
         if laser.get("passes") is not None and (laser["passes"] < 1 or laser["passes"] != int(laser["passes"])):
             raise ValueError("Passes must be a positive integer.")
-    fields = config.get("custom_fields", {})
-    if not isinstance(fields, dict) or any(
-        not k.strip()
-        or (not (submitted and v is None) and (not isinstance(v, (str, int, float)) or not str(v).strip()))
-        for k, v in fields.items()
+
+
+def _custom_field_is_valid(name, value, submitted):
+    """Whether one custom field may be stored.
+
+    A name is always required. A null value is allowed only on a submission:
+    submitting renders every field the operator declared, including the ones
+    they left empty, and `None` is what that renders from. A draft has no such
+    rendering, so a blank value there is just blank.
+    """
+    if not name.strip():
+        return False
+    if value is None:
+        return submitted
+    return isinstance(value, (str, int, float)) and bool(str(value).strip())
+
+
+def _validate_custom_fields(fields, submitted):
+    if not isinstance(fields, dict) or not all(
+        _custom_field_is_valid(name, value, submitted) for name, value in fields.items()
     ):
         raise ValueError("Custom fields require names and values.")
+
+
+def normalize_config(config, user, catalog, submitted=False):
+    """Check a configuration and return it in the section form, ready to store.
+
+    Both at once, deliberately: several of the checks below are what make the
+    normalisation safe to do -- the operator, the assignment options and the
+    per-laser defaults are all written back into the configuration they were
+    validated from.
+    """
+    if not isinstance(config, dict):
+        raise ValueError("Configuration must be an object.")
+    if len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
+        raise ValueError("Configuration exceeds 256 KB.")
+    config = unpack(config)
+    _validate_run_params(config, user, catalog, submitted)
+    config["createdBy"] = str(user["_id"])
+    repeat, wraparound = assignment_options(config.get("laser_assignment"))
+    config["laser_assignment"] = {"repeat": repeat, "wraparound": wraparound}
+    _validate_lasers(config.get("laser_params"))
+    _validate_custom_fields(config.get("custom_fields", {}), submitted)
     return config
 
 
