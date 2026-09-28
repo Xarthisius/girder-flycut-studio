@@ -1,17 +1,10 @@
-# Lint configuration for girder-flycut-studio.
+# Lint and format configuration for girder-flycut-studio.
 #
-# The selected rules are the subset of girder-dashboards' ruleset that this
-# repository passes today. Two deliberate omissions, both recorded in
-# docs/CONVERSION_PLAN.md:
-#
-#   "I"  (import sorting) -- 26 findings, nearly all of them function-local
-#        imports that Phase 5 hoists to module scope. Enabling it before that
-#        would sort blocks the same phase is about to delete. See Decision 5.
-#
-#   E501 (line length) -- 253 lines exceed 100 characters, the longest at 581.
-#        Phase 5 applies whatever limit Decision 5 settles on, module by module
-#        during the rest.py split. `line-length` below only affects
-#        `ruff format` until then.
+# Decision 5 of docs/CONVERSION_PLAN.md: `ruff format` plus import sorting at
+# 120 columns. Phase 5 applied it, so "I" and E501 are gates now rather than
+# deferrals -- the formatter keeps them satisfied, and the three prose lines it
+# would not rewrap were rewrapped by hand in the same commit.
+
 exclude = [
     ".eggs",
     ".git",
@@ -34,7 +27,7 @@ indent-width = 4
 target-version = "py310"
 
 [lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E5", "E7", "E9", "F", "I"]
 ignore = []
 fixable = ["ALL"]
 unfixable = []

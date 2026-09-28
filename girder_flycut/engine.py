@@ -1,8 +1,9 @@
 # Generated from cfstack.py by build_dashboard.py.
 from __future__ import annotations
-from pathlib import Path
-from decimal import Decimal, InvalidOperation
+
 import xml.etree.ElementTree as ET
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 
 def require(cond: bool, msg: str) -> None:
@@ -11,6 +12,7 @@ def require(cond: bool, msg: str) -> None:
     """
     if not cond:
         raise ValueError(msg)
+
 
 def _float(value, default: float) -> float:
     """
@@ -21,9 +23,10 @@ def _float(value, default: float) -> float:
     except Exception:
         return default
 
+
 def normalize_thickness(cfg: dict, igsn_cfg: dict) -> dict:
     """
-    normalize_thickness: Resolve missing thickness values using defaults. 
+    normalize_thickness: Resolve missing thickness values using defaults.
     """
     foil_default = igsn_cfg.get("material", {}).get("thickness_um", None)
     foil_default = _float(foil_default, 0.0) if foil_default is not None else None
@@ -52,6 +55,7 @@ def normalize_thickness(cfg: dict, igsn_cfg: dict) -> dict:
 
     return resolved
 
+
 def _format_flyer_number(value):
     """Round flyer metadata numbers to at most two relevant decimal places."""
     if value in (None, ""):
@@ -65,6 +69,7 @@ def _format_flyer_number(value):
     if rounded == rounded.to_integral():
         return int(rounded)
     return float(rounded)
+
 
 def build_physical_flyer_csv_rows(
     cfg: dict,
@@ -106,6 +111,7 @@ def build_physical_flyer_csv_rows(
 
     return rows
 
+
 def build_output_metadata(
     cfg: dict,
     igsn_cfg: dict,
@@ -120,8 +126,7 @@ def build_output_metadata(
 ) -> dict:
     """Build the JSON metadata companion file for an output set."""
     sidecar_flyers = {
-        str(flyer.get("position", "")).strip(): flyer
-        for flyer in template_sidecar.get("physical_flyers", [])
+        str(flyer.get("position", "")).strip(): flyer for flyer in template_sidecar.get("physical_flyers", [])
     }
     material_cfg = igsn_cfg.get("material", {}) or {}
     flyers: list[dict] = []
@@ -167,6 +172,7 @@ def build_output_metadata(
         "flyers": flyers,
     }
 
+
 def get_cut(root: ET.Element, name: str):
     """
     get_cut: Find a CutSetting element by name, case-insensitive. Returns None if not found.
@@ -181,6 +187,7 @@ def get_cut(root: ET.Element, name: str):
             return cut
     return None
 
+
 def rename_text_exact(root: ET.Element, old_text: str, new_text: str, case_insensitive: bool = True) -> int:
     """
     rename_text_exact: Rename all Shape elements of Type='Text' with Str matching old_text to new_text.
@@ -194,9 +201,13 @@ def rename_text_exact(root: ET.Element, old_text: str, new_text: str, case_insen
             changed += 1
     return changed
 
-def apply_cut_defaults_to_flyer(root: ET.Element, flyer_number: int, cut_defaults: dict, flyer_prefix: str = "F") -> bool:
+
+def apply_cut_defaults_to_flyer(
+    root: ET.Element, flyer_number: int, cut_defaults: dict, flyer_prefix: str = "F"
+) -> bool:
     """
-    apply_cut_defaults_to_flyer: Apply default laser parameters (igsn-config) to the CutSetting of a given flyer number in the XML.
+    apply_cut_defaults_to_flyer: Apply default laser parameters (igsn-config) to the
+    CutSetting of a given flyer number in the XML.
     """
     cut_name = f"{flyer_prefix}{int(flyer_number)}"
     cut = get_cut(root, cut_name)

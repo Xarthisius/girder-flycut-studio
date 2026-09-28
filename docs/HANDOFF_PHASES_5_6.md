@@ -6,12 +6,24 @@ measurements taken on 2026-09-27. **Delete this file when Phase 6 lands.**
 
 | | |
 |---|---|
-| **Closed** | 25 of 33. Phases 0–4 complete. |
-| **Left** | 8 — `B4 E4 E5 E6` (Phase 5) and `C6 E7 F1 F3 G1` (Phase 6) |
-| **Baseline** | `phase-4f-pug-stylus` (PR #11), which is where this file lands |
+| **Closed** | 29 of 33. **Phases 0–5 complete.** |
+| **Left** | 4 — `C6 E7 F1 F3 G1` is Phase 6, and all that remains. |
+| **Baseline** | PR #11 is merged. `E5` and `B4` landed on `phase-5a-imports-and-format`. |
 
-If PR #11 is still open, merge it and branch from `conversion` first. Every line number
-below is measured against that tree.
+**Line numbers below predate `B4`.** The formatter rewrapped 18 files and grew
+`rest.py` from 608 lines to 764, so re-grep for an anchor rather than trusting the
+number next to it.
+
+### The two questions, answered
+
+1. **`E501` is a CI gate, at 120 columns** — Decision 5 unchanged. `ruff.toml` selects
+   `E5` and `I`, and CI runs `ruff format --check .` too, which is why ruff is pinned
+   exactly in both `requirements-dev.txt` and the workflow. 88 columns was considered
+   and rejected: it leaves 20 prose lines to rewrap by hand against 120's three.
+2. **The in-dashboard admin button goes.** The screen lives at the route. So `G1` is a
+   deletion rather than the one-line hide recorded below, **and the harness's 11 admin
+   checks must be moved to drive `#plugins/flycut/config`** instead of un-hiding the
+   button, or they quietly stop testing anything.
 
 ---
 
@@ -49,11 +61,20 @@ What it does *not* cover, so change these with care:
 
 ## Phase 5 — server-side alignment
 
+**All four steps are done**; they are kept below for the record. **Phase 5 is complete —
+resume at Phase 6.**
+
 Four issues: `E5`, `B4`, `E4`/`E2`, `E6`. **Do them in that order.** Formatting before
 restructuring keeps the restructuring diff readable; hoisting imports before formatting
 means the formatter sorts the final set.
 
-### Step 1 — `E5`: hoist the function-local imports
+### ~~Step 1~~ — `E5`: hoist the function-local imports  ✅
+
+**Done.** 20 of the 22 hoisted. The `girder_jsonforms` prediction below was wrong: that
+import is not a deferral but the body of a `try`/`except ImportError` that degrades
+`register_config()` to a 503, and `rest.py` imports `materials` at module scope, so
+hoisting the `materials.py` copy alone would turn a missing dependency into a failed
+plugin import. Both stay deferred, and both now carry a comment saying so.
 
 22 of them. Mostly mechanical, with **two exceptions that must stay local**:
 
@@ -73,7 +94,11 @@ and `bson`/`re` ones are plain deferrals with no reason behind them. Three redun
 `ObjectId` re-imports go (`rest.py:195`, `rest.py:504`, and the module-level one at line 3
 already covers both).
 
-### Step 2 — `B4`: Decision 5's formatter run
+### ~~Step 2~~ — `B4`: Decision 5's formatter run  ✅
+
+**Done**, and the three-residual-line prediction held exactly. Proven formatting-only
+by AST-comparing every changed file against its previous revision with import and alias
+order normalised; the only residual difference was two docstrings in `engine.py`.
 
 `ruff format` plus `I`, at the 120 columns already in `ruff.toml`.
 
@@ -97,7 +122,15 @@ select list and to CI so they stay fixed. Right now `ruff.toml` selects `E4,E7,E
 
 Verify: `ruff check .`, `pytest tests`, and `git diff --stat` should be formatting only.
 
-### Step 3 — `E4` and `E2`: the model layer
+### ~~Step 3~~ — `E4` and `E2`: the model layer  ✅
+
+**Done.** `FlycutConfig` subclasses `Item` rather than standing beside it. One correction
+to the table below: `validate()` is reachable only on the creation path, which 5b routed
+through the model for that reason. Every other configuration write is a partial
+`update_one` with `$set`/`$unset` on nested `meta.flycut` fields and bypasses the model
+entirely; converting those is not part of `E4`, and several are deliberate atomic field
+flips whose concurrency a whole-document save would not preserve. `rest.py` is 684 lines
+now, and `tests/test_models.py` adds 14 tests.
 
 `FlycutConfig`, registered with `ModelImporter.registerModel`. It absorbs the logic
 currently spread across five methods of the REST resource:
@@ -125,9 +158,17 @@ is what it exists for.
 breaks the UI silently — pytest asserts on it, but the browser harness is what proves the
 pickers still populate. Run both.
 
-### Step 4 — `E6`: split `rest.py`
+### ~~Step 4~~ — `E6`: split `rest.py`  ✅
 
-608 lines, 18 routes. Into `rest/config.py`, `rest/template.py`, `rest/settings.py`, per
+**Done**, as four route mixins over a `GateMixin`, not the three modules below: a single
+`config.py` would have been near 450 lines, because `save_config` is 112 and
+`register_config` 139. Largest module is now 284. Two things the plan did not anticipate
+— `find_packages(include=["girder_flycut"])` matched only the top-level package, so the
+`models/` subpackage added in 5b was already missing from the wheel; and renaming the `id`
+parameter for `modelParam` left three bare `id` references silently resolving to the
+builtin, which no linter can see. An AST walk found them.
+
+684 lines, 18 routes. Into `rest/config.py`, `rest/template.py`, `rest/settings.py`, per
 the plan. Two things go with it:
 
 - **The 14 `self.gate()` calls become one decorator.** `gate()` checks that the dashboard

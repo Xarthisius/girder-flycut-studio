@@ -1,6 +1,7 @@
+import xml.etree.ElementTree as ET
 import zipfile
 from io import BytesIO
-import xml.etree.ElementTree as ET
+
 
 def _excel_cell_value(cell: ET.Element, shared_strings: list[str], ns: dict[str, str]):
     cell_type = cell.get("t")
@@ -19,6 +20,7 @@ def _excel_cell_value(cell: ET.Element, shared_strings: list[str], ns: dict[str,
     except ValueError:
         return raw
 
+
 def read_laser_excel(payload: bytes) -> list[dict]:
     """Read the first worksheet of an .xlsx file using only the standard library."""
     ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
@@ -27,7 +29,9 @@ def read_laser_excel(payload: bytes) -> list[dict]:
         if "xl/sharedStrings.xml" in archive.namelist():
             root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
             shared_strings = ["".join(node.itertext()) for node in root.findall("x:si", ns)]
-        sheet_names = sorted(name for name in archive.namelist() if name.startswith("xl/worksheets/sheet") and name.endswith(".xml"))
+        sheet_names = sorted(
+            name for name in archive.namelist() if name.startswith("xl/worksheets/sheet") and name.endswith(".xml")
+        )
         if not sheet_names:
             raise ValueError("The workbook has no worksheets.")
         root = ET.fromstring(archive.read(sheet_names[0]))
@@ -47,7 +51,15 @@ def read_laser_excel(payload: bytes) -> list[dict]:
     if not rows:
         raise ValueError("The first worksheet is empty.")
     headers = [str(value or "").strip().lower() for value in rows[0]]
-    aliases = {"maxpower": "power", "power": "power", "qpulsewidth": "qpulsewidth", "speed": "speed", "frequency": "frequency", "numpasses": "passes", "passes": "passes"}
+    aliases = {
+        "maxpower": "power",
+        "power": "power",
+        "qpulsewidth": "qpulsewidth",
+        "speed": "speed",
+        "frequency": "frequency",
+        "numpasses": "passes",
+        "passes": "passes",
+    }
     positions = {aliases[header]: index for index, header in enumerate(headers) if header in aliases}
     required = {"power", "qpulsewidth", "speed", "frequency", "passes"}
     missing = sorted(required - positions.keys())

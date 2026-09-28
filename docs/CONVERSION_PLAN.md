@@ -20,15 +20,14 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 
 ## Progress
 
-**Closed (25).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C1 C2 C3 C4 C5 C7 · D1 D2 D3 ·
-E1 E2 E3 · F2 F4.
+**Closed (29).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B4 B5 · C1 C2 C3 C4 C5 C7 · D1 D2 D3 ·
+E1 E2 E3 E4 E5 E6 · F2 F4.
 
-**Untouched (8).**
+**Untouched (4).**
 
 | Issue | What is left | Phase |
 |---|---|---|
-| **B4 E4 E5 E6** | Line length, a config model, local imports, the `rest.py` split | 5 — *next* |
-| **C6 E7 G1** | The config page and the four endpoints behind it | 6 |
+| **C6 E7 G1** | The config page and the four endpoints behind it | 6 — *next* |
 | **F1 F3** | The vendored dependency; package metadata | 6 |
 
 **Phase 4 is complete.** Every Critical and every web-client convention issue is closed.
@@ -847,6 +846,13 @@ girder-dashboards' 88: it respects the existing dense style while ending the
 
 **Changes:** B4 becomes a formatter run plus a CI step rather than a manual rewrap, and
 E5's import hoisting is what `I` then enforces.
+
+**Applied in Phase 5a.** 120 columns held; 88 was reconsidered and rejected, because it
+leaves 20 prose lines to rewrap by hand where 120 leaves three. `ruff.toml` selects `E5`
+and `I`; CI gates `ruff format --check .` as well as `ruff check .`, since neither rule
+catches general formatting drift on its own. That makes the formatter a gate, so ruff is
+pinned exactly in `requirements-dev.txt` and in the workflow — ruff is pre-1.0, and an
+unpinned release could turn CI red with no change to this repo. Bump the two together.
 
 ## Measurements
 

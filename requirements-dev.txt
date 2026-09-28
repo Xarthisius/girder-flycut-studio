@@ -3,7 +3,10 @@
 pytest
 pytest-girder
 pytest-cov
-ruff
+# Pinned exactly: CI gates `ruff format --check`, and ruff is pre-1.0, so an
+# unpinned formatter release could turn CI red with no change to this repo.
+# Keep in sync with .github/workflows/build-test.yaml.
+ruff==0.16.9
 # Used by the Excel input tests. Normally pulled in by girder-jsonforms, listed
 # here so the suite does not depend on that transitively.
 openpyxl

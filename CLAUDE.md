@@ -33,30 +33,36 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 | #8 | 4c | `girder.dialog.confirm` (`C5`); laser rules to `core/laser.js` |
 | #9 | 4d | The five screens became views over a `WorkflowModel` (`D1`, most of `C1`) |
 | #10 | 4e | `builder.js` became six views over a model and two collections (`C1`, `C4`) |
+| #11 | 4f | Pug and Stylus (`C2`, `C3`); the client became its own npm project |
 
-**In flight:** `phase-4f-pug-stylus`, three commits, not yet a PR. Pug and Stylus
-(`C2`, `C3`), and the client became its own npm project. **Phase 4 is complete** — 25 of
-33 closed.
+**Phase 4 is complete** — 25 of 33 closed.
+
+**Phase 5 is complete** — 29 of 33 closed. Three branches stacked and unmerged:
+`phase-5a-imports-and-format` (`E5`, `B4`), `phase-5b-models` (`E4`, `E2`) and
+`phase-5c-rest-split` (`E6`). Each needs its own PR, in that order.
 
 ### Where to pick up
 
-**Phase 5, server-side alignment.** Nothing on the client is outstanding.
+**Phase 6, packaging and the last mile.** Nothing on the client or the server is
+outstanding.
 **`docs/HANDOFF_PHASES_5_6.md` is the working document for what remains** — ordering,
 file anchors, the measurements behind each step, and the two things to decide first. It
 is disposable; delete it when Phase 6 lands.
 
-- **`FlycutConfig` model** registered with `ModelImporter.registerModel`, owning
-  `validate()`, lifecycle and workspace containment — the logic now spread across `gate`,
-  `config_item`, `in_workspace`, `lifecycle` and `serialize`. *(`E4`)*
-- **`StackLock` model** formalising the Phase 0 TTL fix behind the model layer. *(`E2`)*
-- **Split `rest.py`** — 515 lines, 18 routes — into `rest/config.py`, `rest/template.py`,
-  `rest/settings.py`; replace the 14 `self.gate()` calls with one decorator and use
-  `modelParam` where a document is loaded by id. *(`E6`)*
-- **Hoist every function-local import**, removing the three redundant `ObjectId`
-  re-imports. *(`E5`)*
-- **`ruff format` plus `I`, at 120 columns** — Decision 5. 18 files change. *(`B4`)*
+- ~~**`FlycutConfig` and `StackLock` models.** *(`E4`, `E2`)*~~ Done in 5b. `FlycutConfig`
+  subclasses `Item`, because a configuration *is* an item carrying `meta.flycut`. Note
+  `validate()` is only reachable on the creation path: every other configuration write is
+  a partial `update_one` on nested fields that never touches the model.
+- ~~**Split `rest.py`.** *(`E6`)*~~ Done in 5c, as four route mixins rather than three
+  modules — `save_config` and `register_config` alone are 250 lines. `@gated` replaced the
+  14 `self.gate()` calls, and `modelParam` the five routes that load a document by id.
+- ~~**Hoist every function-local import.** *(`E5`)*~~ Done in 5a. Two sites stay
+  deferred and say why: the circular pair in `FlycutPlugin.load()`, and
+  `girder_jsonforms` in `materials.py` and `rest.py`, whose `register_config()` site is
+  a `try`/`except ImportError` that degrades to a 503 rather than a lazy import.
+- ~~**`ruff format` plus `I`, at 120 columns** — Decision 5. *(`B4`)*~~ Done in 5a.
 
-`pytest tests` is 42 tests at 87% coverage and is the safety net for all of it; run it
+`pytest tests` is 56 tests at 87% coverage and is the safety net for all of it; run it
 after each step rather than at the end.
 
 The conventions the client settled on, in case Phase 6 adds to it:
@@ -122,6 +128,11 @@ no external registry is contacted while `jsonforms.igsn_service_url` is empty.
 
 None of these are inferable from the code. Each one cost a red CI run or worse.
 
+- **The live instance reloads changed code by itself.** It bind-mounts this tree and
+  restarts only the server inside the container, so `docker service update --force` is
+  ~85 seconds of waiting for nothing. If a bad intermediate state was caught mid-edit and
+  the server died on a traceback, force it instead with
+  `docker exec --user=root -ti $(docker ps --filter=name=wt_girder -q) touch /girder-plugins/__init__.py`.
 - **Celery runs over Redis, not a separate broker.** `GIRDER_WORKER_BROKER` and
   `GIRDER_WORKER_BACKEND` are both `redis://…`. Creating a deposition fires
   `deposition.created`, whose JSONForms handler calls `.delay()`, which needs somewhere to
@@ -150,7 +161,8 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 ```
 girder_flycut/
   __init__.py            FlycutPlugin.load() — registers the dashboard and the REST resource
-  rest.py                18 routes under /api/v1/flycut  (604 lines; Phase 5 splits it)
+  rest/                  17 routes under /api/v1/flycut, as four mixins over GateMixin:
+                         settings, template, config, lifecycle; plus gate, locking, catalog
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
   generate.py engine.py  LightBurn, CSV and resolved JSON output
   web_client/
@@ -167,7 +179,7 @@ girder_flycut/
     package.json         the client's own build; the root one lints and tests
     vite.config.ts       the lib build, with the Pug plugin
     dist/                built, gitignored, shipped in the wheel
-tests/                   pytest (42) + core.mjs, status.mjs, workflow.cjs,
+tests/                   pytest (56: api, dashboard, models) + core.mjs, status.mjs,
                          complete_workflow.cjs, bundle.cjs
 test/browser/            seed.py + verify.cjs — the only thing that renders the UI
 vendor/girder-dashboards/  a committed snapshot of the dependency  (F1; Phase 6 deletes it)
@@ -182,15 +194,18 @@ anything touching the UI.
   deliberate exceptions, both explained in `.eslintrc.md`: `promise/no-native` is off
   permanently (the builder is plain DOM with its own `fetch` shim, not Backbone using
   jQuery deferreds), and `no-new-func` is disabled in two suites that still slice source.
-- **Python** is `ruff check` at `E4,E7,E9,F`. `I` and `E501` are deferred to Phase 5 per
-  Decision 5, which settled on `ruff format` plus import sorting at 120 columns.
+- **Python** is `ruff format` plus `ruff check` at `E4,E5,E7,E9,F,I`, at 120 columns —
+  Decision 5, applied in Phase 5a. CI gates `ruff format --check .` as well as
+  `ruff check .`, so ruff is pinned exactly in `requirements-dev.txt` and the workflow;
+  bump both together. Three prose lines were rewrapped by hand because the formatter
+  will not touch them.
 - **Styles** are scoped under a single `.g-flycut-dashboard` class rather than prefixing
   each of 288 selectors — which is what the conventions actually ask for. There is no
   shadow root; that class is the only thing keeping the dashboard's CSS away from Girder
   core, and `tests/bundle.cjs` fails if a rule escapes it.
-- **Not yet converted:** markup is `.html` and styles are `.css`, not Pug and Stylus. That
-  lands with `C1`, when the monolith is split into per-view templates — converting first
-  would mean translating one file and immediately re-splitting it.
+- **Markup is Pug and styles are Stylus**, one file per view, converted in 4f once `C1`
+  had split the monolith into per-view templates. See the Stylus trap below — it
+  evaluates the right-hand side, so several CSS functions need `unquote()`.
 
 ## Traps
 
