@@ -8,7 +8,7 @@ import redis
 from girder.exceptions import RestException
 
 from ..artifacts import configuration
-from ..schema import unpack
+from ..schema import stack_id
 
 # How long a stack may stay locked before Redis reclaims it. Generation is
 # synchronous, so a legitimate operation finishes far inside this; the window
@@ -83,7 +83,7 @@ def stack_locked(method):
             raw = kwargs.get("config", args[0] if args else {})
         else:
             raw = configuration(kwargs["item"])
-        stack = str(unpack(raw).get("run_params", {}).get("stackid", "")).strip().upper()
+        stack = stack_id(raw)
         if not stack:
             # The payload names no stack, so there is no shared resource to
             # serialize on yet. Locking `""` instead would make every
