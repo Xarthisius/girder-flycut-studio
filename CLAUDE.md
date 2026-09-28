@@ -34,38 +34,38 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 | #9 | 4d | The five screens became views over a `WorkflowModel` (`D1`, most of `C1`) |
 | #10 | 4e | `builder.js` became six views over a model and two collections (`C1`, `C4`) |
 | #11 | 4f | Pug and Stylus (`C2`, `C3`); the client became its own npm project |
+| #12 | 5a | Function-local imports hoisted; `ruff format` at 120 (`E5`, `B4`) |
+| #13 | 5b | `FlycutConfig` and `StackLock` under `ModelImporter` (`E4`, `E2`) |
+| #14 | 5c | `rest.py` became four route mixins; `@gated`; `modelParam` (`E6`) |
 
-**Phase 4 is complete** — 25 of 33 closed.
+**The conversion is complete** — all 33 issues closed, Phases 0 through 6.
 
-**Phase 5 is complete** — 29 of 33 closed. Three branches stacked and unmerged:
-`phase-5a-imports-and-format` (`E5`, `B4`), `phase-5b-models` (`E4`, `E2`) and
-`phase-5c-rest-split` (`E6`). Each needs its own PR, in that order.
+**In flight:** three stacked branches, not yet PRs, to be merged in order —
+`phase-6a-drop-vendor` (`F1`), `phase-6b-config-page` (`C6`, `E7`, `G1`) and
+`phase-6c-metadata` (`F3`).
 
-### Where to pick up
+### Where things stand
 
-**Phase 6, packaging and the last mile.** Nothing on the client or the server is
-outstanding.
-**`docs/HANDOFF_PHASES_5_6.md` is the working document for what remains** — ordering,
-file anchors, the measurements behind each step, and the two things to decide first. It
-is disposable; delete it when Phase 6 lands.
+Nothing is outstanding. `docs/CONVERSION_PLAN.md` keeps the issue register and the five
+decisions as the record of why things are the way they are; `docs/HANDOFF_PHASES_5_6.md`
+was disposable and is gone.
 
-- ~~**`FlycutConfig` and `StackLock` models.** *(`E4`, `E2`)*~~ Done in 5b. `FlycutConfig`
-  subclasses `Item`, because a configuration *is* an item carrying `meta.flycut`. Note
-  `validate()` is only reachable on the creation path: every other configuration write is
-  a partial `update_one` on nested fields that never touches the model.
-- ~~**Split `rest.py`.** *(`E6`)*~~ Done in 5c, as four route mixins rather than three
-  modules — `save_config` and `register_config` alone are 250 lines. `@gated` replaced the
-  14 `self.gate()` calls, and `modelParam` the five routes that load a document by id.
-- ~~**Hoist every function-local import.** *(`E5`)*~~ Done in 5a. Two sites stay
-  deferred and say why: the circular pair in `FlycutPlugin.load()`, and
-  `girder_jsonforms` in `materials.py` and `rest.py`, whose `register_config()` site is
-  a `try`/`except ImportError` that degrades to a 503 rather than a lazy import.
-- ~~**`ruff format` plus `I`, at 120 columns** — Decision 5. *(`B4`)*~~ Done in 5a.
+What Phase 6 changed, in case it is not obvious from the tree:
 
-`pytest tests` is 56 tests at 87% coverage and is the safety net for all of it; run it
-after each step rather than at the end.
+- **There is no `vendor/`.** girder-dashboards is `==0.2.0` from PyPI, whose nine files
+  were byte-identical to the snapshot. Both CI jobs install it explicitly, because they
+  install this plugin with `--no-deps` and pip would otherwise never resolve it.
+- **The policy screen is a Girder plugin config page** at `#plugins/flycut/config`,
+  registered in `web_client/routes.js` and framed by `ConfigView`. It uses Girder's own
+  Bootstrap classes and none of this plugin's CSS — it is an admin-console page, not a
+  dashboard screen. The in-dashboard button is gone.
+- **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs a view
+  and sets its `el` but never calls `render()`.
 
-The conventions the client settled on, in case Phase 6 adds to it:
+`pytest tests` is 56 tests at 88% coverage; `node test/browser/verify.cjs` is 89 checks
+and is the only thing that renders the UI.
+
+The conventions the client settled on, which anything added to it should follow:
 
 - **Rules to `core/`, writing to the view.** A screen's state pass is one `applyState()`
   loop over a description from `core/workflow.js`; the builder's `refresh()` is the same
@@ -160,27 +160,33 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 
 ```
 girder_flycut/
-  __init__.py            FlycutPlugin.load() — registers the dashboard and the REST resource
-  rest/                  17 routes under /api/v1/flycut, as four mixins over GateMixin:
-                         settings, template, config, lifecycle; plus gate, locking, catalog
+  __init__.py            FlycutPlugin.load() — registers the models, the dashboard and
+                         the REST resource
+  models/                FlycutConfig (an Item subclass) and StackLock, both registered
+                         with ModelImporter
+  rest/                  17 routes under /api/v1/flycut, as four mixins over GateMixin —
+                         settings, template, config, lifecycle — plus gate, locking, catalog
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
   generate.py engine.py  LightBurn, CSV and resolved JSON output
   web_client/
-    main.js              the shell: screen visibility, status line, busy guard,
+    main.js              the dashboard shell: screen visibility, status line, busy guard,
                          and the lifecycle that moves a configuration between screens
+    routes.js            exposePluginConfig + the #plugins/flycut/config route
     util.js              request, escapeHtml, ask — shared, not DOM-free
     core/                DOM-free: assess, catalog, config, laser, preview, records,
                          submit, validate, workflow
     models/              WorkflowModel, BuilderModel, LaserModel, CustomFieldModel
     collections/         LaserCollection, CustomFieldCollection
-    views/               ScreenView + five screens + ConfigBuilderView and its six children
+    views/               ScreenView + four shell screens + ConfigBuilderView and its six
+                         children; ConfigView and AdminSettingsView are the config page
     templates/           one .pug per view, plus pickerScreen/formSection mixins
-    stylesheets/         one .styl per view, plus variables.styl
+    stylesheets/         one .styl per dashboard view, plus variables.styl — the config
+                         page deliberately has none, it uses Girder's own
     package.json         the client's own build; the root one lints and tests
     vite.config.ts       the lib build, with the Pug plugin
     dist/                built, gitignored, shipped in the wheel
 tests/                   pytest (56: api, dashboard, models) + core.mjs, status.mjs,
-                         complete_workflow.cjs, bundle.cjs
+                         workflow.cjs, complete_workflow.cjs, bundle.cjs
 test/browser/            seed.py + verify.cjs — the only thing that renders the UI
 ```
 
@@ -208,6 +214,19 @@ anything touching the UI.
 
 ## Traps
 
+- **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs the
+  view and sets its `el`, but never calls `render()`. A `ConfigView` that does not render
+  from `initialize()` routes correctly, throws nothing, and draws an empty page.
+- **Girder's plugin list addresses its own links by `g-route`, not `href`.** A selector
+  looking for the config gear by href finds nothing and looks like the route failed.
+- **`find_packages(include=["girder_flycut"])` matches only the top-level package.**
+  Every subpackage needs `girder_flycut.*` too, or the wheel installs and then fails to
+  import. This was wrong for a phase without anything noticing.
+- **Renaming an `id` parameter can leave bare `id` resolving to the builtin.** No linter
+  sees it — `id` is always defined — and the symptom is a 500 from pymongo much later. An
+  AST walk over the changed functions is what finds them.
+- **The static-file list is `lru_cache`d for the server's lifetime.** Rebuilding the
+  bundle is not enough; the browser keeps getting the old one until the server reloads.
 - **Source slicing is gone; do not bring it back.** The `.cjs` suites used to extract
   functions from `main.js` by string offsets and `eval` them, and those boundaries broke
   four times in four phases — de-indentation in Phase 2, the file move in Phase 3,

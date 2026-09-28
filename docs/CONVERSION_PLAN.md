@@ -10,7 +10,7 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 | **Against** | `girder/WEB_CLIENT_CONVENTIONS.md`, `girder/CLAUDE.md`, `girder-dashboards/docs/extending.md` |
 | **Issues** | 33 — 8 critical, 14 major, 11 minor |
 | **Phases** | 7 |
-| **Status** | Phases 0–4 complete; 4f in flight. **25 of 33 closed, none partial.** |
+| **Status** | **The conversion is complete. All 33 issues closed, none partial.** |
 
 > The register below is the original audit and its severities are as-found. Entries carry
 > their own revision notes where execution changed the picture. `CLAUDE.md` has the short
@@ -20,22 +20,25 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 
 ## Progress
 
-**Closed (30).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B4 B5 · C1 C2 C3 C4 C5 C7 · D1 D2 D3 ·
-E1 E2 E3 E4 E5 E6 · F1 F2 F4.
+**Closed (33).** All of them. A1–A6 · B1–B5 · C1–C7 · D1–D3 · E1–E7 · F1–F4 · G1.
 
-**Untouched (3).**
+**Untouched: none.**
 
-| Issue | What is left | Phase |
-|---|---|---|
-| **C6 E7 G1** | The config page and the four endpoints behind it | 6 — *next* |
-| **F3** | Package metadata and a LICENSE file | 6 |
+**The conversion is finished.** What the repository is now:
 
-**Phase 4 is complete.** Every Critical and every web-client convention issue is closed.
-The client is eleven Backbone views over four models and two collections, with one `.pug`
-and one `.styl` per view, built by Vite from its own npm project, and checked by eslint,
-pug-lint and stylelint. No test reads source as a string.
-
-What is left is server-side — Phase 5 — and packaging, plus the config page, in Phase 6.
+- **The client** is twelve Backbone views over four models and two collections, one `.pug`
+  and one `.styl` per view, built by Vite from its own npm project and checked by eslint,
+  pug-lint and stylelint. No test reads source as a string.
+- **The server** is a `FlycutConfig` and a `StackLock` model under `ModelImporter`, and a
+  REST package of four route mixins over a `GateMixin` — no module past 310 lines, one
+  `@gated` decorator in place of fourteen `self.gate()` calls, and `modelParam` on the
+  routes that load a document.
+- **The policy screen** is a Girder plugin config page at `#plugins/flycut/config`, in
+  Girder's own styling rather than the dashboard's.
+- **Packaging** is a pinned PyPI girder-dashboards with no `vendor/` tree, a LICENSE, and
+  metadata worth publishing.
+- **The nets** are 56 pytest tests at 88%, five Node suites, and an 89-check browser
+  harness — the only thing that renders the UI.
 
 ---
 
