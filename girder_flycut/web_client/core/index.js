@@ -5,8 +5,12 @@ export { assessConfiguration } from './assess.js';
 export {
     makeLaser, restoreImportedLaser, PALETTE, LASER_LIMIT,
     normalizeLayerNames, moveLaser, applyMaterialDefaults,
-    usedLaserCount, resolveLaserForLayer
+    usedLaserCount, resolveLaserForLayer, laserListState, acceptColor, COLOR_REJECTED
 } from './laser.js';
+export {
+    materialSummary, templateSummary, catalogOptions, resolveMaterial
+} from './catalog.js';
+export { previewLayout, UNCONFIGURED } from './preview.js';
 export {
     selectableConfigs, groupedOptions, byNewest, STAGES,
     savedTime, selectMarkup, keepSelection
@@ -16,4 +20,4 @@ export {
     generationState, registrationState, keepsActiveConfig
 } from './workflow.js';
 export { runSubmission, submissionOutcome } from './submit.js';
-export { exportDecision, INCOMPLETE, UNACKNOWLEDGED } from './validate.js';
+export { exportDecision, statusLabel, INCOMPLETE, UNACKNOWLEDGED } from './validate.js';

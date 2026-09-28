@@ -83,3 +83,54 @@ export function resolveLaserForLayer(lasers, layerIndex, { repeat, wraparound })
     const laser = setting?.enabled !== false ? setting || null : null;
     return { laser, augmented: Boolean(laser && laser.name !== `F${layerIndex + 1}`) };
 }
+
+/**
+ * What the laser list looks like, given the template it is being fitted to.
+ *
+ * An entry is "overflow" when the template has no layer left for it, and
+ * "unused" when it is overflow or switched off -- the card is greyed either
+ * way, but only overflow disables its checkbox, because the enabled state is
+ * restored if the row fits again later.
+ *
+ * @returns {{cards: {overflow: boolean, unused: boolean}[], count: string,
+ *   addDisabled: boolean, surplus: boolean, addTitle: string, error: string}}
+ */
+export function laserListState(lasers, layerCount = null, repeat = 1) {
+    const used = usedLaserCount(lasers, layerCount, repeat);
+    const surplus = layerCount !== null && lasers.length >= layerCount;
+    return {
+        cards: lasers.map((laser, index) => {
+            const overflow = used !== null && index >= used;
+            return { overflow, unused: overflow || laser.enabled === false };
+        }),
+        count: `${lasers.length} / ${layerCount ?? '—'}`,
+        addDisabled: lasers.length >= LASER_LIMIT,
+        surplus,
+        addTitle: surplus
+            ? 'Additional settings will be unused by this template'
+            : 'Add the next layer setting',
+        error: lasers.length ? '' : 'At least one laser setting is required.'
+    };
+}
+
+export const COLOR_REJECTED = 'Use a unique six-digit hex color, such as #3C8D40.';
+
+/**
+ * Whether an entry may take a colour, and in what form.
+ *
+ * Colours are how the preview and the generated LightBurn file tell layers
+ * apart, so two entries sharing one would silently merge them.
+ *
+ * @returns {{ok: boolean, color: string, message: ?string}} `color` is what the
+ *   input should show either way -- the accepted value, or the old one back.
+ */
+export function acceptColor(lasers, laserId, value) {
+    const laser = lasers.find((item) => item.id === laserId);
+    const candidate = String(value).trim();
+    const taken = lasers.some((item) =>
+        item.id !== laserId && item.color.toLowerCase() === candidate.toLowerCase());
+    if (!/^#[0-9a-f]{6}$/i.test(candidate) || taken) {
+        return { ok: false, color: laser.color, message: COLOR_REJECTED };
+    }
+    return { ok: true, color: candidate.toUpperCase(), message: null };
+}

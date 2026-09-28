@@ -31,40 +31,50 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 | #6 | 4b | Shadow root dropped, stylesheet scoped (Decision 1) |
 | #7 | — | Browser end-to-end harness (`D2`), pulled forward before 4c |
 | #8 | 4c | `girder.dialog.confirm` (`C5`); laser rules to `core/laser.js` |
+| #9 | 4d | The five screens became views over a `WorkflowModel` (`D1`, most of `C1`) |
 
-**In flight:** `phase-4d-screens`, four commits, not yet a PR. The five workflow screens
-became views over a `WorkflowModel`, and `D1` is closed — no test reads source as a
-string any more.
+**In flight:** `phase-4e-builder`, three commits, not yet a PR. `builder.js` is gone;
+`C1` and `C4` are closed. Phase 4 has only `C2`/`C3` left.
 
 ### Where to pick up
 
-`C1`'s second half: the builder. `builder.js` is 425 lines holding the form, the laser
-table and the preview in one closure, and `main.js` is ~230 lines of chrome around it.
-The plan's decomposition is `ConfigBuilderView` composing `RunParametersView`,
-`LaserListView` / `LaserCardView`, `CustomFieldsView`, `PreviewView`, `JsonPanelView`
-and `StatusPanelView`, with `LaserCollection` and `CustomFieldCollection` arriving under
-the views that listen to them.
+`C2` and `C3` — Pug and Stylus — and they are the mechanical half of Phase 4.
 
-The pattern is established and worth following rather than reinventing:
+The markup is already one `.html` per view, so `C2` is a per-fragment translation with no
+restructuring left in it. Copy the 14-line `pugPlugin()` from
+`vendor/girder-dashboards/.../vite.config.ts` verbatim; the laser card and the custom-field
+row are the two natural mixins, and they are template literals in
+`views/LaserListView.js` and `views/CustomFieldsView.js` rather than in a template file.
 
-- **Rules to `core/`, writing to the view.** Every screen's state pass is one
-  `applyState()` loop over a description from `core/workflow.js`. `core/laser.js` already
-  holds what a `LaserCollection` would enforce.
-- **A screen's `el` is the screen.** The template holds the section's contents and
+`C3` is the bigger half: `styles/dashboard.css` is one 1,526-line file and wants splitting
+the same way, one `.styl` per view with tokens in `variables.styl`, imported for side
+effect from each view module. `tests/bundle.cjs` already fails if any rule escapes
+`.g-flycut-dashboard`, so the scoping is checked as the split happens.
+
+Then `pug-lint` and `stylelint` join `npm run lint` and CI, matching girder core's
+`eslint . && pug-lint . && stylelint **/*.styl` with `@girder/pug-lint-config` and
+`stylelint-stylus/standard`.
+
+Also due in 4f, and small: `vite.config.ts` and `package.json` sit at the repository root
+because two source trees once shared one npm project. `config_builder/` is gone;
+conventions §3 puts both inside `web_client/`. Five places still describe the old build —
+`vite.config.ts:10`, `ruff.toml`, two comments in `.github/workflows/build-test.yaml`,
+`docs/CONFIGURATION_FORM_VALIDATION.md` and `docs/DEVELOPMENT.md`.
+
+The conventions the views settled on, worth following rather than reinventing:
+
+- **Rules to `core/`, writing to the view.** A screen's state pass is one `applyState()`
+  loop over a description from `core/workflow.js`; the builder's `refresh()` is the same
+  idea for the three viewer panels.
+- **A view's `el` is the thing.** The template holds the contents and
   `tagName`/`id`/`className` supply the wrapper, so nothing nests and `showScreen()` still
-  finds it by id.
-- **Split `render()` from `renderState()`.** The first rebuilds markup and follows the
-  records; the second writes flags and follows `busy`, which changes twice per request.
+  finds a screen by id.
+- **Split what follows the data from what follows `busy`.** Rebuilding a picker's options
+  every time a button greys out throws away the user's selection.
 - **Models arrive with the views that listen to them**, never before.
-
-Then `C2`/`C3`: the templates are already one file per screen, so Pug is a per-fragment
-translation. `builder.html` is still 92 lines and splits with the builder views.
-
-Two things the builder split has to respect. `createBuilder()` queries the whole mount at
-construction and everything it looks for is in `topbar.html` or `builder.html` — that is
-why the screen views can be built after it. And the four controls in `guard()`'s
-`builderControls()` are the ones the model does not reach; they disappear when the
-builder has a model of its own.
+- **Collections keep their rules in `core/`.** `apply()` hands a transform a copy of the
+  list and resets to what comes back, which is what keeps `core/laser.js` testable without
+  Backbone.
 
 ## Commands
 
@@ -145,13 +155,14 @@ girder_flycut/
   generate.py engine.py  LightBurn, CSV and resolved JSON output
   web_client/
     main.js              the shell: screen visibility, status line, busy guard,
-                         and the builder's chrome  (C1's remaining half)
-    builder.js           the configuration form, still one closure  (C1 splits this)
+                         and the lifecycle that moves a configuration between screens
     util.js              request, escapeHtml, ask — shared, not DOM-free
-    core/                DOM-free: assess, laser, records, submit, validate, workflow
-    models/              WorkflowModel — what the screens share
-    views/               ScreenView + the five screen views
-    templates/           one .html per screen, imported as strings  (C2 makes them Pug)
+    core/                DOM-free: assess, catalog, config, laser, preview, records,
+                         submit, validate, workflow
+    models/              WorkflowModel, BuilderModel, LaserModel, CustomFieldModel
+    collections/         LaserCollection, CustomFieldCollection
+    views/               ScreenView + five screens + ConfigBuilderView and its six children
+    templates/           one .html per view, imported as strings  (C2 makes them Pug)
     styles/              dashboard.css, imported for its side effect -> dist/style.css
     dist/                built, gitignored, shipped in the wheel
 tests/                   pytest (42) + core.mjs, status.mjs, workflow.cjs,
@@ -189,6 +200,15 @@ anything touching the UI.
 - **A hidden checkbox still reports itself enabled**, and `#validationAck` is only visible
   once its Status tab is the active one. Submitting without acknowledging fails with a
   toast and no navigation, which in a Playwright script looks exactly like a hang.
+- **Backbone delegates on the bubble phase.** The read-only guard on drag and keydown has
+  to be attached directly, in the capture phase, or the laser list's own handlers run
+  first and a read-only configuration can be reordered.
+- **Playwright's `dragTo` cannot grab the laser drag handle** — the card head sits over
+  it. The harness dispatches the four drag events the list binds instead, which is also a
+  more precise test than driving Chromium's drag implementation.
+- **`prop('disabled', true)` on a `<fieldset>` sets the property, not the attribute.** It
+  still disables the descendants per spec, so assert on a control inside it rather than on
+  the fieldset.
 - **`page.goto` to the URL you are already on does nothing.** All six screens live inside
   the one `#dashboard/:id` route, so the harness has a `reopen()` helper that goes via
   `#dashboards` first.

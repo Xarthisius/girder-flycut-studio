@@ -10,7 +10,7 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 | **Against** | `girder/WEB_CLIENT_CONVENTIONS.md`, `girder/CLAUDE.md`, `girder-dashboards/docs/extending.md` |
 | **Issues** | 33 — 8 critical, 14 major, 11 minor |
 | **Phases** | 7 |
-| **Status** | Phases 0–3, 4a/4b and 4c merged; D2 done; 4d in flight. **22 of 33 closed, 1 partial.** |
+| **Status** | Phases 0–3 and 4a–4d merged; 4e in flight. **23 of 33 closed, none partial.** |
 
 > The register below is the original audit and its severities are as-found. Entries carry
 > their own revision notes where execution changed the picture. `CLAUDE.md` has the short
@@ -20,25 +20,26 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 
 ## Progress
 
-**Closed (22).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C4 C5 C7 · D1 D2 D3 · E1 E2 E3 ·
+**Closed (23).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C1 C4 C5 C7 · D1 D2 D3 · E1 E2 E3 ·
 F2 F4.
-
-**Partly done (1).** C1 — the five workflow screens are views; the builder is not.
 
 **Untouched (10).**
 
 | Issue | What is left | Phase |
 |---|---|---|
-| **C1** | The builder: `builder.js` is still one closure | 4e — *next* |
-| **C2 / C3** | Markup and styles are not yet Pug and Stylus | 4f, after the builder split |
+| **C2 / C3** | Markup and styles are not yet Pug and Stylus | 4f — *next* |
 | **B4 E4 E5 E6** | Line length, a config model, local imports, the `rest.py` split | 5 |
 | **C6 E7 G1** | The config page and the four endpoints behind it | 6 |
 | **F1 F3** | The vendored dependency; package metadata | 6 |
 
-Every Critical is closed. C4 closed in 4d with the views: its headline — "cannot be
+Every Critical is closed. C4 closed across 4d and 4e: its headline — "cannot be
 instantiated twice" — had been fixed back in Phase 3, and what remained was shape, which
-`WorkflowModel` supplies. D1 closed in the same phase; no test in the repository reads
-source as a string.
+`WorkflowModel`, `BuilderModel`, `LaserCollection` and `CustomFieldCollection` supply. D1
+closed in 4d; no test in the repository reads source as a string.
+
+Phase 4 has one thing left, and it is the mechanical half: the markup is already one file
+per view, so C2 is a per-fragment translation to Pug, and C3 splits one 1,526-line
+stylesheet the same way.
 
 ---
 
@@ -267,13 +268,15 @@ running it, neither previously written down: JSONForms' frontend must be built, 
 ### C · Web-client conventions
 
 #### C4 — `app.js` is a module-global singleton and cannot be instantiated twice
-**Critical · ~~Phase 4~~ → closed across Phase 3 and 4d**
+**Critical · ~~Phase 4~~ → closed across Phase 3, 4d and 4e**
 
-*Closed in 4d.* `WorkflowModel` holds `activeConfig`, `saved`, `busy`,
-`completeWorkflow` and `readOnly`; the screens listen to it rather than being
-rendered by a function that could see all five closure variables at once. The
-builder's own state follows in 4e with `LaserCollection` and
-`CustomFieldCollection`, under the views that listen to them.
+*Closed in 4e.* `WorkflowModel` holds what the screens share; `BuilderModel`,
+`LaserCollection` and `CustomFieldCollection` hold what the builder does. Each
+arrived with the views that listen to it, never before.
+
+The collections keep the rules in `core/laser.js` rather than absorbing them:
+`apply()` hands a transform a copy of the list and resets to what comes back,
+which is what lets the same rules stay testable without Backbone.
 
 *Revised in 4c.* The headline is already fixed: Phase 3 wrapped the builder in
 `createBuilder()`, so `state`, `draggedLaserId`, `activeHelp` and the twenty-five
@@ -295,12 +298,20 @@ downstream: no second instance, no clean re-render, no unit test of a view.
 each view instance owns its own.
 
 #### C1 — One Backbone view for six screens
-**Major · Phase 4 · the workflow screens closed in 4d**
+**Major · ~~Phase 4~~ → closed across 4d and 4e**
 
-*Revised in 4d.* Five of the six are views now — `WorkflowHomeView`,
-`ConfigurationPickerView`, `GenerationPickerView`, `RegistrationPickerView` and
-`AdminSettingsView` — each over a shared `WorkflowModel`, each with an `events`
-hash and a template of its own. The sixth, the builder, is 4e.
+*Closed.* Eleven views. The five screens — `WorkflowHomeView`,
+`ConfigurationPickerView`, `GenerationPickerView`, `RegistrationPickerView`,
+`AdminSettingsView` — over a shared `WorkflowModel` in 4d, and the builder in
+4e: `ConfigBuilderView` composing `RunParametersView`, `LaserListView`,
+`CustomFieldsView`, `StatusPanelView`, `JsonPanelView` and `PreviewView`.
+`showScreen()` survives as three lines of the shell, because which screen is
+visible is genuinely nobody's screen.
+
+`LaserCardView` is not among them. A card view per entry would re-render on
+every keystroke where the list re-renders only on structural changes, and
+entries are named for their position so almost every change rewrites the whole
+list anyway. The card is a function in `LaserListView`.
 
 A single `Dashboard` view renders `workflowHome`, `configurationPicker`, `lightburnPicker`,
 `registrationPicker`, `builderScreen` and `adminSettingsScreen`, toggling `.hidden` via
@@ -713,6 +724,8 @@ import, loudly, instead of silently emptying a test.
   tracked with `parentView: this` so `View.destroy()` reclaims them.
 - **Templates to Pug**, one `templates/<camelCase>.pug` per view; the laser card and custom-field row
   become mixins, and the four picker screens share a base via `extends`. *(C2)*
+  *4e note:* the split already happened — one `.html` per view — so this is a
+  per-fragment translation with no restructuring left in it.
 - **Styles to Stylus**, one file per view, tokens in `variables.styl`, imported for side effect from
   the view module. *(C3)*
 - **Resolve the shadow root** per Decision 1. If dropped, every selector gains a `g-flycut-` prefix in

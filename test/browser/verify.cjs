@@ -92,6 +92,37 @@ async function fillRequiredFields(page, pickMaterial) {
     return page.inputValue('#stackid');
 }
 
+/**
+ * Drag one laser card onto another, by dispatching the events the list listens
+ * for.
+ *
+ * Playwright's dragTo cannot grab the handle -- the card head sits over it --
+ * and a real drag would be testing Chromium rather than the handler. These are
+ * the four events the list actually binds, with the DataTransfer it reads and
+ * the clientY it uses to decide before-or-after.
+ */
+async function dragCard(page, fromIndex, toIndex, after = true) {
+    return page.evaluate(({ fromIndex, toIndex, after }) => {
+        const cards = [...document.querySelectorAll('.g-flycut-dashboard #laserList .laser-card')];
+        const handle = cards[fromIndex].querySelector('.drag-handle');
+        const target = cards[toIndex];
+        const dataTransfer = new DataTransfer();
+        const fire = (type, node, extra = {}) => node.dispatchEvent(
+            new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer, ...extra }));
+        fire('dragstart', handle);
+        const box = target.getBoundingClientRect();
+        const clientY = after ? box.bottom - 2 : box.top + 2;
+        fire('dragover', target, { clientY });
+        fire('drop', target, { clientY });
+        fire('dragend', handle);
+    }, { fromIndex, toIndex, after });
+}
+
+/** The layer names down the laser list, which is what a reorder rewrites. */
+async function laserOrder(page) {
+    return page.locator('#laserList .laser-card .laser-name').allInnerTexts();
+}
+
 async function textOf(page, selector) {
     return (await page.locator(selector).first().textContent().catch(() => '') || '').trim();
 }
@@ -362,6 +393,131 @@ async function reopen(page, base, id) {
             skip('status leaves Incomplete once required fields are set', 'same');
         }
 
+        // ---- the builder's own controls ---------------------------------
+        // The form, the laser table, the custom fields and the viewer tabs had
+        // no coverage at all: the walk above only proves the builder renders and
+        // that a filled form submits. 4e rewrites all of it into views, so this
+        // captures the behaviour first -- the same reason the harness itself was
+        // built before 4c rather than after.
+        const laserCards = () => page.locator('#laserList .laser-card').count();
+
+        // Tabs. Each panel is a sibling and only one carries .active.
+        await page.click('.g-flycut-dashboard [data-tab="json"]');
+        const shownJson = await textOf(page, '#jsonOutput');
+        check('the JSON tab shows the configuration as JSON',
+            shownJson.startsWith('{') && shownJson.includes('run_parameters'),
+            shownJson.slice(0, 40).replace(/\s+/g, ' '));
+        check('only one viewer panel is active at a time',
+            await page.locator('.viewer-panel.active').count() === 1);
+        await page.click('.g-flycut-dashboard [data-tab="preview"]');
+        check('the Preview tab comes back', await visible(page, '#canvas'));
+
+        // Zoom is the preview's own state and survives a redraw.
+        await page.click('#zoomIn');
+        check('zooming in reports the new scale',
+            (await textOf(page, '#zoomLabel')) === '110%', await textOf(page, '#zoomLabel'));
+        await page.click('#zoomOut');
+        check('and zooming back out returns to 100%',
+            (await textOf(page, '#zoomLabel')) === '100%', await textOf(page, '#zoomLabel'));
+
+        // Laser entries: add, name by position, remove, and the floor of one.
+        const startingLasers = await laserCards();
+        await page.click('#addLaserBtn');
+        await page.waitForFunction(
+            (n) => document.querySelectorAll('.g-flycut-dashboard #laserList .laser-card').length === n,
+            startingLasers + 1, { timeout: 10000 });
+        check('adding a laser entry names it for its position',
+            (await page.locator('#laserList .laser-card .laser-name').last().innerText()).trim() ===
+                `Layer F${startingLasers + 1}`,
+            await page.locator('#laserList .laser-card .laser-name').last().innerText());
+        check('the count follows the list',
+            (await textOf(page, '#laserCount')).startsWith(`${startingLasers + 1} /`),
+            await textOf(page, '#laserCount'));
+
+        // Colours are how the preview and the generated file tell layers apart,
+        // so two entries may not share one.
+        const firstHex = page.locator('#laserList .laser-card .hex-editor').first();
+        const secondHex = page.locator('#laserList .laser-card .hex-editor').nth(1);
+        const keptColor = await firstHex.inputValue();
+        await secondHex.fill(keptColor);
+        await secondHex.press('Enter');
+        await page.waitForTimeout(400);
+        check('a duplicate colour is refused and the old one comes back',
+            (await secondHex.inputValue()).toLowerCase() !== keptColor.toLowerCase(),
+            `${keptColor} -> ${await secondHex.inputValue()}`);
+        check('and it says why', (await textOf(page, '#toast')).includes('unique six-digit hex'),
+            await textOf(page, '#toast'));
+        await secondHex.fill('#0a0b0c');
+        await secondHex.press('Enter');
+        await page.waitForTimeout(400);
+        check('a unique colour is accepted and stored uppercase',
+            (await page.locator('#laserList .laser-card .hex-editor').nth(1).inputValue()) === '#0A0B0C',
+            await page.locator('#laserList .laser-card .hex-editor').nth(1).inputValue());
+
+        // Switching an entry off greys its card without removing it.
+        const secondCard = page.locator('#laserList .laser-card').nth(1);
+        await secondCard.locator('[data-key="enabled"]').uncheck();
+        await page.waitForTimeout(400);
+        check('a disabled entry is marked unused',
+            (await page.locator('#laserList .laser-card').nth(1).getAttribute('class')).includes('unused'));
+        await page.locator('#laserList .laser-card').nth(1).locator('[data-key="enabled"]').check();
+        await page.waitForTimeout(400);
+
+        await page.locator('#laserList .laser-card').nth(1).locator('.remove-laser').click();
+        await page.waitForFunction(
+            (n) => document.querySelectorAll('.g-flycut-dashboard #laserList .laser-card').length === n,
+            startingLasers, { timeout: 10000 });
+        check('removing an entry puts the list back', await laserCards() === startingLasers);
+        // The form needs at least one entry, and says so rather than emptying.
+        while (await laserCards() > 1) {
+            await page.locator('#laserList .laser-card .remove-laser').last().click();
+            await page.waitForTimeout(250);
+        }
+        await page.locator('#laserList .laser-card .remove-laser').first().click();
+        await page.waitForTimeout(400);
+        check('the last laser entry cannot be removed', await laserCards() === 1,
+            await textOf(page, '#toast'));
+
+        // Entries are named for their position, so a reorder renames them --
+        // which is why the swatches move and the names do not.
+        await page.click('#addLaserBtn');
+        await page.waitForTimeout(300);
+        const colorsBefore = await page.locator('#laserList .color-swatch')
+            .evaluateAll((nodes) => nodes.map((node) => node.style.getPropertyValue('--swatch')));
+        await dragCard(page, 0, 1);
+        await page.waitForTimeout(400);
+        const colorsAfter = await page.locator('#laserList .color-swatch')
+            .evaluateAll((nodes) => nodes.map((node) => node.style.getPropertyValue('--swatch')));
+        check('dragging an entry past another swaps them',
+            colorsAfter[0] === colorsBefore[1] && colorsAfter[1] === colorsBefore[0],
+            `${colorsBefore.join(' ')} -> ${colorsAfter.join(' ')}`);
+        check('and the names still follow position',
+            (await laserOrder(page)).join() === ['Layer F1', 'Layer F2'].join(),
+            (await laserOrder(page)).join(' '));
+        await page.locator('#laserList .laser-card').last().locator('.remove-laser').click();
+        await page.waitForTimeout(300);
+
+        // Custom fields reach the exported JSON, which is the only thing that
+        // proves the rows are read rather than merely rendered.
+        await page.click('#addCustomBtn');
+        await page.waitForSelector('#customList .custom-row', { timeout: 10000 });
+        const row = page.locator('#customList .custom-row').last();
+        await row.locator('[data-key="name"]').fill('batch_code');
+        await row.locator('[data-key="value"]').fill('QZ-19');
+        await page.waitForTimeout(400);
+        check('the custom field count follows the rows',
+            (await textOf(page, '#customCount')).startsWith('1 field'),
+            await textOf(page, '#customCount'));
+        await page.click('.g-flycut-dashboard [data-tab="json"]');
+        check('a custom field reaches the exported JSON',
+            (await textOf(page, '#jsonOutput')).includes('"batch_code"'));
+        await page.locator('#customList .custom-row').last().locator('.remove-custom').click();
+        await page.waitForTimeout(400);
+        check('removing the row takes it back out of the JSON',
+            !(await textOf(page, '#jsonOutput')).includes('batch_code'));
+        await page.click('.g-flycut-dashboard [data-tab="preview"]');
+        await page.screenshot({ path: `${SHOTS}/04b-builder-controls.png` });
+
         // ---- the unsaved-changes guard ----------------------------------
         // The riskiest thing C5 touches: canLeave() is synchronous today and one
         // of its callers is a capture-phase click handler.
@@ -398,6 +554,13 @@ async function reopen(page, base, id) {
         if (usable) {
             const runName = `e2e-${stackId}`;
             await page.fill('#saveAsName', runName);
+
+            // A second laser entry, so the configuration that comes back has a
+            // list worth trying to reorder when it is reopened read-only. The
+            // template has more layers than entries either way, so the extra one
+            // changes what is generated only by covering one more layer.
+            await page.click('#addLaserBtn');
+            await page.waitForTimeout(300);
 
             // Submitting is gated on acknowledging any validation warnings, and
             // the box lives in the Status tab.
@@ -461,6 +624,64 @@ async function reopen(page, base, id) {
                 { headers: { 'Girder-Token': token } })).json();
             check('the registered stack ID is locked against reuse',
                 states[stackId] === 'registered', `${stackId} -> ${states[stackId]}`);
+
+            // ---- viewing a saved configuration --------------------------
+            // Read-only had no coverage, and it is three separate mechanisms:
+            // a disabled fieldset, the write actions giving way to "Edit a
+            // copy", and the status panel reporting the lifecycle stage rather
+            // than what the form would still need.
+            await reopen(page, BASE, flycut._id);
+            await page.click('#configurationStepBtn');
+            await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 15000 });
+            // The picker groups by lifecycle stage; take the first option in
+            // the Registered group rather than matching on its label text.
+            const registeredId = await page.evaluate(() => document.querySelector(
+                '.g-flycut-dashboard #savedConfigs optgroup[label="Registered"] option')?.value);
+            await page.selectOption('#savedConfigs', registeredId);
+            check('a registered configuration is offered for viewing, not editing',
+                (await textOf(page, '#buildConfigBtn')) === 'View config',
+                await textOf(page, '#buildConfigBtn'));
+            await page.click('#buildConfigBtn');
+            await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 20000 });
+            // A disabled <fieldset> disables its descendants per spec, which is
+            // what actually matters -- and what a check on the fieldset itself
+            // would not see, since the property is set rather than the attribute.
+            check('the form is disabled outright',
+                await page.locator('#stackid').isDisabled() &&
+                await page.locator('#addLaserBtn').isDisabled(),
+                `fieldset.disabled=${await page.evaluate(
+                    () => document.querySelector('.g-flycut-dashboard #configFields').disabled)}`);
+            check('the status panel reports the lifecycle stage',
+                (await textOf(page, '#statusSummary')) === 'Registered',
+                await textOf(page, '#statusSummary'));
+            check('the write actions give way to Edit a copy',
+                await visible(page, '#editCopyBtn') &&
+                !(await visible(page, '#saveGirderBtn')) &&
+                !(await visible(page, '#submitConfigBtn')) &&
+                !(await visible(page, '#resetBtn')));
+            check('it says so rather than showing a save time',
+                (await textOf(page, '#builderMode')) === 'Read-only',
+                await textOf(page, '#builderMode'));
+            // A disabled fieldset does not stop a drag, so that is blocked
+            // separately -- and in the capture phase, ahead of the laser list's
+            // own handlers.
+            const orderBefore = await laserOrder(page);
+            if (orderBefore.length > 1) {
+                await dragCard(page, 0, orderBefore.length - 1);
+                await page.waitForTimeout(400);
+                check('reordering is blocked while read-only',
+                    (await laserOrder(page)).join() === orderBefore.join(),
+                    orderBefore.join(' '));
+            } else {
+                skip('reordering is blocked while read-only', 'only one laser entry to drag');
+            }
+            await page.screenshot({ path: `${SHOTS}/07b-read-only.png` });
+            await page.click('#editCopyBtn');
+            await page.waitForTimeout(400);
+            check('Edit a copy hands the form back',
+                !(await page.locator('#configFields').isDisabled()) &&
+                (await textOf(page, '#builderMode')).startsWith('Editing a copy'),
+                await textOf(page, '#builderMode'));
         } else {
             for (const name of ['submitting returns to the workflow and reports it',
                 'a submitted configuration is selectable for generation',

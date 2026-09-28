@@ -1,0 +1,19 @@
+          <summary><span><b>02</b> Laser Parameters</span><span class="section-count" id="laserCount">1 / 28</span><span class="chevron">⌃</span></summary>
+          <div class="section-body">
+            <h3 class="section-subtitle">Selection style</h3>
+            <div class="assignment-controls">
+              <label class="field checkbox-field" for="allowWraparound"><input id="allowWraparound" type="checkbox" checked> <span class="field-label">Wraparound <button type="button" class="help" aria-label="Wraparound help" data-tip="Start again at the first setting when the template has more layers than the listed settings cover.">?</button></span></label>
+              <label id="repeatWrap" class="field" for="repeatX"><span class="field-label">Repeat each setting for <button type="button" class="help" aria-label="Repeat each setting help" data-tip="Apply each listed setting to this many consecutive template layers before moving to the next setting.">?</button></span>
+                <span class="repeat-input"><input id="repeatX" name="repeat_x" type="number" min="1" max="10000" step="1" value="1"><span>layers</span></span>
+              </label>
+            </div>
+            <h3 class="section-subtitle">Parameters</h3>
+            <div id="laserList" class="laser-list"></div>
+            <button id="addLaserBtn" class="button dashed" type="button"><span>＋</span> Add laser setting</button>
+            <div class="excel-import">
+              <input id="excelFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+              <button id="importExcelBtn" class="button ghost" type="button"><span aria-hidden="true">⇧</span> Import from Excel</button>
+              <small id="excelStatus"></small>
+            </div>
+            <p id="laserError" class="section-error" role="alert"></p>
+          </div>

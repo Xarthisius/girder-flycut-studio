@@ -36,8 +36,12 @@ View.extend = extend;
 function Model() {}
 Model.extend = extend;
 
+function Collection() {}
+Collection.extend = extend;
+
 const girder = {
-    Backbone: { Model },
+    Backbone: { Model, Collection },
+    $: () => ({ one: () => {} }),
     views: { View },
     rest: { restRequest: () => Promise.reject(new Error('not called at load')) },
     auth: { getCurrentUser: () => null },
@@ -48,7 +52,9 @@ const girder = {
 // evaluation rather than at render throws here rather than in a browser.
 vm.runInNewContext(bundle, { girder, document: undefined, window: undefined });
 
-const extendedSpec = specs.find((spec) => spec.startBuilder);
+// The shell is found by what it defines rather than by position: it is no
+// longer the last view extended, and there are eighteen of them now.
+const extendedSpec = specs.find((spec) => spec.start && spec.render && spec.destroy);
 assert(extendedSpec, 'the dashboard shell must be one of the extended views');
 
 assert.equal(registered.length, 1, 'the bundle must register exactly one dashboard');
@@ -57,18 +63,18 @@ assert.equal(key, 'flycut-config', 'key must match girder_flycut.KEY on the serv
 assert.equal(typeof spec.view, 'function', 'a dashboard is registered with a view constructor');
 console.log('Bundle registers the flycut-config dashboard with a view.');
 
-for (const method of ['render', 'startBuilder', 'destroy']) {
+for (const method of ['render', 'start', 'destroy']) {
     assert.equal(typeof extendedSpec[method], 'function', `view must define ${method}()`);
 }
-assert.equal(extendedSpec.startBuilder.constructor.name, 'AsyncFunction',
-    'startBuilder awaits the builder, so it has to stay async');
-console.log('View defines render, startBuilder and destroy.');
+assert.equal(extendedSpec.start.constructor.name, 'AsyncFunction',
+    'start awaits the catalog and the configurations, so it has to stay async');
+console.log('View defines render, start and destroy.');
 
 // The screens are views of their own, each with an events hash and an id that
 // showScreen() addresses it by. A screen that lost its id would be invisible to
 // navigation and nothing else would notice.
 const SCREEN_IDS = ['workflowHome', 'configurationPicker', 'lightburnPicker',
-    'registrationPicker', 'adminSettingsScreen'];
+    'registrationPicker', 'adminSettingsScreen', 'builderScreen'];
 const screens = specs.filter((spec) => SCREEN_IDS.includes(spec.id));
 assert.equal(screens.length, SCREEN_IDS.length,
     `expected a view per screen, found ${screens.map((s) => s.id)}`);
@@ -77,6 +83,23 @@ for (const screen of screens) {
     assert(Object.keys(screen.events).length, `${screen.id} has an empty events hash`);
 }
 console.log(`Each of the ${screens.length} screens is a view with an events hash.`);
+
+// The builder's own children. Three form sections that render into
+// #configFields and three panels the tab strip switches between; the panels are
+// addressed by id and the sections are not, so only the panels can be named.
+const PANEL_IDS = ['statusPanel', 'jsonPanel', 'previewPanel'];
+const panels = specs.filter((spec) => PANEL_IDS.includes(spec.id));
+assert.equal(panels.length, PANEL_IDS.length,
+    `expected a view per viewer panel, found ${panels.map((s) => s.id)}`);
+for (const panel of panels) {
+    assert.equal(panel.tagName, 'section', `${panel.id} must stay a <section>`);
+    assert(panel.className.includes('viewer-panel'),
+        `${panel.id} needs .viewer-panel for the tab strip to switch it`);
+}
+const sections = specs.filter((spec) => spec.tagName === 'details' &&
+    spec.className === 'form-section');
+assert.equal(sections.length, 3, `expected three form sections, found ${sections.length}`);
+console.log('The builder composes three form sections and three viewer panels.');
 
 // Vite minifies the lib build, so every identifier in the bundle is mangled
 // and only runtime behaviour and string payloads can be asserted here. The
