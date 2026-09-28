@@ -13,11 +13,102 @@ the code. Line numbers drift, so each item names an anchor instead.
 | **Python** | 2,628 lines across 27 modules |
 | **Tests** | 68 pytest at 88%, five Node suites, an 89-check browser harness |
 | **Done** | the two issues that were correctness risks — see PR #21, #22 |
-| **Left** | six, none of them a bug; all are cost, clarity, or dead weight |
+| **Left** | seven. One is two real bugs in the stack mutex; the rest are cost, clarity, or dead weight |
 
 ---
 
-## 1. The listing endpoints are N+1  *(highest value)*
+## 1. The stack mutex has two bugs  *(the only correctness item)*
+
+`stack_locked` is **thread-safe** in the narrow sense, and deliberately so. It
+keeps no shared mutable state, `StackLock()`'s only shared attribute is a
+PyMongo collection (which is thread-safe), and mutual exclusion is delegated to
+MongoDB's unique `_id` index. That last part matters: the server runs
+`gunicorn --workers=4`, so a `threading.Lock` would have covered one worker in
+four.
+
+Two things are wrong underneath that, both reproduced rather than reasoned
+about.
+
+### The release is not ownership-checked
+
+`hold()` ends with `delete_one({"_id": stack})`, which deletes by id alone. If
+the 900-second TTL reclaims the document while the holder is still working, a
+second request legitimately acquires the lock -- and the first holder's
+`finally` then deletes *the second holder's* document:
+
+```
+second holder present while first is still inside: second
+after the first holder's finally ran   : None
+```
+
+Both writers proceed with neither holding a lock. Mongo's TTL monitor runs
+about every 60 seconds, so real expiry is the TTL plus up to a minute.
+
+### Every stack-less configuration shares one mutex
+
+The decorator derives the stack ID from the raw payload *before* the handler
+validates anything, so a submit with no `stackid` -- or no `run_params` at all
+-- takes the lock `_id: ""`:
+
+```
+lock taken for a config with no stackid   : [{'_id': ''}]
+lock taken for a config with no run_params: [{'_id': ''}]
+```
+
+Two unrelated malformed submits then refuse each other with "This stack is
+being changed", which is both wrong and misleading.
+
+### Fix: a thin fail-closed wrapper over redis-py's lock
+
+Redis is not optional infrastructure here. Girder core imports it at module
+scope in `notification.py`, which `asgi.py` pulls in, and it reads the same
+`GIRDER_NOTIFICATION_REDIS_URL` this would use. It is always present and always
+configured.
+
+`redis-py`'s `Lock` stores a per-acquisition token and releases through a Lua
+script that compares it, so **the first bug is fixed by the library**. Verified
+against a real Redis:
+
+```
+expiry then reacquire -- can the first holder steal the second's lock?
+  second acquired after expiry: True
+  second holder's lock survived our release: True
+```
+
+**Wrap it ourselves; do not use `girder_jsonforms.lib.locks.distributed_lock`.**
+That one logs and proceeds when Redis errors or acquisition times out -- correct
+for the idempotent startup step it was written for, wrong for a mutex guarding
+IGSN registration. With Redis unreachable it grants the same lock twice:
+
+```
+--- with Redis unreachable ---
+  both critical sections ran: ['outer', 'inner']
+  => mutual exclusion: LOST
+```
+
+Ours takes `blocking=False`, `timeout=900`, raises 409 when the lock is held,
+and converts `RedisError` to a 503 rather than proceeding. About twelve lines.
+
+**What it deletes.** `models/lock.py` entirely -- 55 lines, the TTL index,
+`ensureExpiry`, its `_guard` call in `load()`, and the "drop stuck documents by
+hand" caveat in its docstring. Three of the direct Mongo operations counted in
+item 3 go with it.
+
+**The trade-off, stated plainly.** During a Redis outage the request fails
+where today it would carry on. Failing closed is the right default for a mutex
+guarding IGSN registration, and Girder's own notifications are already degraded
+in that state -- but it is a behaviour change, not a free win.
+
+The second bug is independent of the substrate: it lives in `stack_locked`'s
+derivation and needs the same guard whichever mutex sits underneath.
+
+**Exit.** A stack-less submit is refused by validation rather than by the lock;
+an expired-then-reacquired lock survives its previous holder's release; and both
+probes above are regression tests.
+
+---
+
+## 2. The listing endpoints are N+1  *(largest measured cost)*
 
 **Measured**, by counting model calls per request:
 
@@ -60,7 +151,7 @@ N; the three endpoints' totals flat as configurations are added.
 
 ---
 
-## 2. Eight of the eighteen direct Mongo writes no longer need to be
+## 3. Eight of the eighteen direct Mongo writes no longer need to be
 
 This was the part of the review with the strongest justification, and **PR #22
 removed most of that justification**. Current state:
@@ -92,7 +183,8 @@ FlycutConfig().claim(item, expect="draft", become="deleting")  # the CAS, return
 
 The nine that stay are `lock()`, the two draft claims in `save_config` and
 `delete_draft` and its rollback, the IGSN reservation's duplicate-key insert, the
-three `StackLock` operations, and `link_input`'s `$setUnion` pipeline. Each is an
+three `StackLock` operations — which item 1 deletes outright, taking the count to
+six — and `link_input`'s `$setUnion` pipeline. Each is an
 atomicity requirement, not a shortcut, and each should say so in one line.
 
 `annotate()` stays because the payload it restores is stored *under* `meta` and
@@ -106,7 +198,7 @@ what makes this safe — confirm that before converting each one.
 
 ---
 
-## 3. `save_config` is 111 lines
+## 4. `save_config` is 111 lines
 
 One function doing: a size check, packing, a draft guard, submit-time validation,
 name derivation, state assembly, stack-collision arbitration across three
@@ -127,12 +219,12 @@ three persistence paths — overwrite an existing stack, update a draft, create 
 
 ---
 
-## 4. Duplication worth a name
+## 5. Duplication worth a name
 
 | expression | occurrences | belongs |
 |---|---|---|
 | `unpack(configuration(item))…["stackid"]…strip().upper()` | 7 | `FlycutConfig.stackId(item)` |
-| `policy()["workspace_folder_id"]` | 9 | resolved once per request — see item 1 |
+| `policy()["workspace_folder_id"]` | 9 | resolved once per request — see item 2 |
 | `FlycutConfig().filter(FlycutConfig().load(id, user=user), user)` | 3 | one helper on the mixin |
 | `FlycutConfig()` constructed | 24 | it is a singleton, but reads as a cost |
 
@@ -141,7 +233,7 @@ re-derived by hand in four modules.
 
 ---
 
-## 5. Dead state, and two overlapping mutexes
+## 6. Dead state, and two overlapping mutexes
 
 `meta.flycut.busy` is written but **never read** — except by its own
 compare-and-swap in `lock()`. `meta.flycut.action` is **never read anywhere**,
@@ -149,18 +241,27 @@ server or client. Both are spread into the client payload by
 `FlycutConfig.filter()`, where `busy` collides by name with the shell's own
 request-in-flight flag.
 
-`lock()` also looks redundant: `@stack_locked` already excludes concurrent
-operations on the same item, because both requests derive the same stack ID from
-it. The one argument for keeping it is `StackLock`'s 900-second TTL — if a
-generation outran it, `busy` would still guard.
+**`lock()` stays, and this is now settled.** It looks redundant — `@stack_locked`
+already excludes concurrent operations on the same item, because both requests
+derive the same stack ID from it. But item 1 shows how the stack lock can be
+*legitimately released while its holder is still working*: the TTL expires and a
+second request acquires it. Ownership tokens stop the first holder deleting the
+second's lock; they do not stop the expiry itself. `lock()`'s per-item
+compare-and-swap is what still refuses the second generation in that window, and
+the registration path has the `flycut_registration` duplicate-key reservation as
+its own equivalent.
 
-**Decide, then act:** either delete `lock()`, `busy` and `action` outright, or
-keep `lock()` and write that TTL argument down where the next reader will find
-it. `action` goes either way.
+So: keep `lock()` and `busy`, and write that reason where the next reader will
+find it, because it is not visible from the call site. Delete `action` — it is
+read nowhere, server or client.
+
+The alternative to a backstop is renewing the lock rather than letting it lapse
+(`redis-py` exposes `extend()`), but that needs something to drive the renewal
+from a synchronous handler. Not worth it unless generation gets much slower.
 
 ---
 
-## 6. Long validators and dense expressions
+## 7. Long validators and dense expressions
 
 Not urgent, but each cost a re-read during the review:
 
@@ -184,18 +285,26 @@ One per item, in this order. The first two are worth doing; the rest are tidying
 
 | branch | item | why this order |
 |---|---|---|
-| `perf-listing-n1` | 1 | the only item with a user-visible cost |
-| `model-owns-its-writes` | 2 + 4 | the stack-ID helper falls out of the same work |
-| `split-save-config` | 3 | easier once the model owns the writes |
-| `drop-dead-lifecycle-state` | 5 | needs the decision below first |
-| `tidy-validators` | 6 | independent, can go any time |
+| `redis-stack-lock` | 1 | the only correctness item, and it deletes a model |
+| `perf-listing-n1` | 2 | the largest cost a user can feel |
+| `model-owns-its-writes` | 3 + 5 | the stack-ID helper falls out of the same work |
+| `split-save-config` | 4 | easier once the model owns the writes |
+| `drop-dead-lifecycle-state` | 6 | just `action` now; see the note there |
+| `tidy-validators` | 7 | independent, can go any time |
 
-## Two things to decide first
+`redis-stack-lock` wants a Redis service in the pytest job. CI already
+provisions one for girder-jsonforms' load-time lock, so nothing there changes.
 
-1. **Does `lock()` survive?** It is either redundant with `@stack_locked` or it is
-   the guard for a lock that outran its TTL. That is a question about which
-   failure you want to be protected from, not a code question — see item 5.
-2. **How far does item 2 go?** Converting all eight writes is the consistent
+## What is still open
+
+1. **Does the stack lock fail closed during a Redis outage?** Item 1 recommends
+   yes — refuse the request rather than run unserialized. It is a behaviour
+   change: today a Redis outage does not stop a generation, and afterwards it
+   would. That is the one judgement call in item 1 worth making deliberately.
+2. **How far does item 3 go?** Converting all eight writes is the consistent
    answer; converting only the ones outside `finally` blocks is the conservative
    one. The difference is whether a whole-document save in a cleanup path is
    acceptable when the lock is already held.
+
+*(The earlier question — whether `lock()` survives — is answered in item 6. It
+does.)*
