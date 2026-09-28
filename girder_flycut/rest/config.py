@@ -135,6 +135,132 @@ class ConfigRoutes:
             - {""}
         )
 
+    def _snapshot(self, config):
+        """The configuration as stored: the packed form, without the operator's identity.
+
+        `createdBy` and `preset` are server-owned, so whatever the client sent
+        for them is dropped rather than trusted.
+        """
+        rendered = copy.deepcopy(config) if "run_parameters" in config else pack(config)
+        rendered.pop("createdBy", None)
+        rendered["preset"] = None
+        return rendered
+
+    def _resolved(self, config, user, validated):
+        """A submission with its references resolved and its rules applied.
+
+        Raises `ValueError` rather than `RestException`, because the caller
+        turns any of these into one 400 and the normalisers below raise the
+        same way.
+        """
+        config = unpack(config)
+        config["preset"] = None
+        is_test_run(config)
+        load_input(config, user)
+        if isinstance(config.get("run_params"), dict):
+            config["run_params"]["foil_material"] = resolve_material(config["run_params"].get("foil_material"), user)[
+                "id"
+            ]
+        catalog = self.catalog_for(config, user)
+        warnings = builder_warnings(config, catalog)
+        if stack_id(config) in self.submitted_stack_ids(user):
+            warnings.append("This Stack ID already has a submitted configuration.")
+        config = normalize_builder_config(config, user, catalog)
+        if warnings and not validated:
+            raise ValueError("Confirm validation warnings before submitting.")
+        return config
+
+    def _name(self, given, stack, submit):
+        """What a configuration is called.
+
+        A submitted one is named for its stack whatever the operator typed --
+        that is what makes `stack{id}-config` the name the workspace can be
+        read by. A draft keeps what was typed, and falls back to its stack or
+        to a placeholder.
+        """
+        given = given.strip()
+        if len(given) > 160:
+            raise RestException("Configuration name must be at most 160 characters.")
+        if submit or (not given and stack):
+            return f"stack{stack}-config"
+        return given or "Untitled draft"
+
+    def _state(self, existing, workspace_id, user, config, submit):
+        """The `meta.flycut` blob this save writes, before any collision is resolved."""
+        now = datetime.now(timezone.utc)
+        state = {
+            "status": "submitted" if submit else "draft",
+            "overwriteSafe": existing["meta"]["flycut"].get("overwriteSafe", True) if existing else True,
+            "createdBy": str(user["_id"]),
+            "savedAt": now,
+            "workspaceId": workspace_id,
+        }
+        if submit:
+            state["submittedAt"] = now
+        else:
+            # Only a draft carries the builder's row layout; submitting renders it.
+            state["customFieldRows"] = config.get("custom_field_rows", [])
+        return state
+
+    def _refuse_stack_collision(self, matches, user, scope):
+        """Why this stack ID may not be taken, in the order the client expects to hear it."""
+        for match in matches:
+            lifecycle = FlycutConfig().lifecycle(match)
+            if lifecycle == "registered":
+                raise RestException("This Stack ID is registered and cannot be reused.", code=409)
+            if lifecycle == "generated":
+                raise RestException("Delete the generated files before reusing this Stack ID.", code=409)
+            if not FlycutConfig().inWorkspace(match, scope) or not Item().hasAccess(match, user, AccessType.WRITE):
+                raise RestException("This Stack ID belongs to another user.", code=409)
+
+    def _replace_submitted(self, matches, existing, name, state, rendered, stack, user, workspace_id):
+        """Take over the submitted configuration that already holds this stack ID.
+
+        Any further configurations for the same stack, and the draft this was
+        submitted from, are removed: one stack, one configuration.
+        """
+        state["overwriteSafe"] = False
+        target = matches[0]
+        promote(target, self.workspace(user, True), stack, user)
+        FlycutConfig().replace(target, name, state, rendered)
+        for duplicate in matches[1:]:
+            remove_config(duplicate, workspace_id)
+        if existing and existing["_id"] != target["_id"]:
+            remove_config(existing, workspace_id)
+        return Item().load(target["_id"], force=True)
+
+    def _update_draft(self, existing, name, state, rendered, stack, submit, user):
+        """Write over the operator's own draft, which another request may be submitting."""
+        if submit:
+            promote(existing, self.workspace(user, True), stack, user)
+        item = FlycutConfig().replace(existing, name, state, rendered, expect="draft")
+        if item is None:
+            raise RestException("This draft was already submitted.", code=409)
+        return item
+
+    def _create(self, name, state, rendered, stack, submit, user, policy):
+        """Bring a configuration into existence, in a folder of its own."""
+        workspace = self.workspace(user, True)
+        parent = workspace if submit else draft_root(workspace, user)
+        folder_name = "stack" + stack if submit else "draft-" + str(ObjectId())
+        if submit and Folder().findOne(
+            {"parentId": workspace["_id"], "parentCollection": "folder", "name": folder_name}
+        ):
+            raise RestException("A folder for this stack already exists in the workspace.", code=409)
+        folder = Folder().createFolder(parent, folder_name, creator=user, public=False)
+        folder = studio_settings.apply_access(Folder(), folder, policy, user)
+        # Through the model, not Item(), so FlycutConfig.validate() runs on the
+        # one write that brings a configuration into existence.
+        item = FlycutConfig().createItem(name, creator=user, folder=folder)
+        item = FlycutConfig().setMetadata(item, {"flycut": state, "config": copy.deepcopy(rendered)})
+        if submit and item["name"] != name:
+            # Direct, because `Item.validate` is what changed the name in the
+            # first place: `createItem` appends `(n)` on a collision, and a
+            # submitted configuration's name has to be exactly its stack's.
+            Item().collection.update_one({"_id": item["_id"]}, {"$set": {"name": name}})
+            item["name"] = name
+        return item
+
     @access.user
     @autoDescribeRoute(
         Description("Save an editable draft or submit a final configuration.")
@@ -147,110 +273,48 @@ class ConfigRoutes:
     @gated
     @stack_locked
     def save_config(self, config, name="", id="", submit=False, validated=False, user=None):
+        """Three persistence paths: overwrite a submitted stack, update a draft, create new.
+
+        Which one runs is the only decision here. Everything above it prepares
+        the same three values for whichever it turns out to be.
+        """
         # One read of the policy for the whole call: it is a `Dashboard.findOne`
-        # plus a deepcopy, and five places below want the same answer from it.
+        # plus a deepcopy, and four places below want the same answer from it.
         policy = studio_settings.policy()
         workspace_id = policy["workspace_folder_id"]
         if len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
             raise RestException("Configuration exceeds 256 KB.")
-        rendered_config = copy.deepcopy(config) if "run_parameters" in config else pack(config)
-        rendered_config.pop("createdBy", None)
-        rendered_config["preset"] = None
+        rendered = self._snapshot(config)
         existing = FlycutConfig().load(id, user=user) if id else None
         if existing and existing["meta"]["flycut"].get("status") != "draft":
             raise RestException("Submitted configurations cannot be edited. Make a copy.", code=409)
         try:
             if submit:
-                config = unpack(config)
-                config["preset"] = None
-                is_test_run(config)
-                load_input(config, user)
-                if isinstance(config.get("run_params"), dict):
-                    config["run_params"]["foil_material"] = resolve_material(
-                        config["run_params"].get("foil_material"), user
-                    )["id"]
-                catalog = self.catalog_for(config, user)
-                warnings = builder_warnings(config, catalog)
-                if stack_id(config) in self.submitted_stack_ids(user):
-                    warnings.append("This Stack ID already has a submitted configuration.")
-                config = normalize_builder_config(config, user, catalog)
-                if warnings and not validated:
-                    raise ValueError("Confirm validation warnings before submitting.")
+                config = self._resolved(config, user, validated)
             else:
                 config = copy.deepcopy(config)
                 config["createdBy"] = str(user["_id"])
         except (ValueError, TypeError) as exc:
             raise RestException(str(exc)) from exc
-        name = name.strip()
-        if len(name) > 160:
-            raise RestException("Configuration name must be at most 160 characters.")
+
         stack = config.get("run_params", {}).get("stackid", "")
-        name = f"stack{stack}-config" if submit else name or (f"stack{stack}-config" if stack else "Untitled draft")
-        state = {
-            "status": "submitted" if submit else "draft",
-            "overwriteSafe": existing["meta"]["flycut"].get("overwriteSafe", True) if existing else True,
-            "createdBy": str(user["_id"]),
-            "savedAt": datetime.now(timezone.utc),
-            "workspaceId": workspace_id,
-        }
-        if not submit:
-            state["customFieldRows"] = config.get("custom_field_rows", [])
-        if submit:
-            state["submittedAt"] = state["savedAt"]
-            matches = self.stack_matches(stack)
-            # `stack_matches` deliberately searches the whole instance, so a
-            # collision outside this workspace is still reported as someone
-            # else's stack rather than silently overwritten.
-            scope = FlycutConfig().workspaceScope(policy)
-            for match in matches:
-                lifecycle = FlycutConfig().lifecycle(match)
-                if lifecycle == "registered":
-                    raise RestException("This Stack ID is registered and cannot be reused.", code=409)
-                if lifecycle == "generated":
-                    raise RestException("Delete the generated files before reusing this Stack ID.", code=409)
-                if not FlycutConfig().inWorkspace(match, scope) or not Item().hasAccess(match, user, AccessType.WRITE):
-                    raise RestException("This Stack ID belongs to another user.", code=409)
-            if matches:
-                if not validated:
-                    raise RestException("Validate replacement of the submitted configuration.", code=409)
-                state["overwriteSafe"] = False
-                target = matches[0]
-                promote(target, self.workspace(user, True), stack, user)
-                FlycutConfig().replace(target, name, state, rendered_config)
-                for duplicate in matches[1:]:
-                    remove_config(duplicate, workspace_id)
-                if existing and existing["_id"] != target["_id"]:
-                    remove_config(existing, workspace_id)
-                return FlycutConfig().filter(
-                    save_config_file(Item().load(target["_id"], force=True), user, rendered_config), user
-                )
-        if existing:
-            if submit:
-                promote(existing, self.workspace(user, True), stack, user)
-            item = FlycutConfig().replace(existing, name, state, rendered_config, expect="draft")
-            if item is None:
-                raise RestException("This draft was already submitted.", code=409)
+        name = self._name(name, stack, submit)
+        state = self._state(existing, workspace_id, user, config, submit)
+
+        # `stack_matches` deliberately searches the whole instance, so a collision
+        # outside this workspace is still reported as someone else's stack rather
+        # than silently overwritten.
+        matches = self.stack_matches(stack) if submit else []
+        if matches:
+            self._refuse_stack_collision(matches, user, FlycutConfig().workspaceScope(policy))
+            if not validated:
+                raise RestException("Validate replacement of the submitted configuration.", code=409)
+            item = self._replace_submitted(matches, existing, name, state, rendered, stack, user, workspace_id)
+        elif existing:
+            item = self._update_draft(existing, name, state, rendered, stack, submit, user)
         else:
-            workspace = self.workspace(user, True)
-            parent = workspace if submit else draft_root(workspace, user)
-            folder_name = "stack" + stack if submit else "draft-" + str(ObjectId())
-            if submit and Folder().findOne(
-                {"parentId": workspace["_id"], "parentCollection": "folder", "name": folder_name}
-            ):
-                raise RestException("A folder for this stack already exists in the workspace.", code=409)
-            folder = Folder().createFolder(parent, folder_name, creator=user, public=False)
-            folder = studio_settings.apply_access(Folder(), folder, policy, user)
-            # Through the model, not Item(), so FlycutConfig.validate() runs on the
-            # one write that brings a configuration into existence.
-            item = FlycutConfig().createItem(name, creator=user, folder=folder)
-            item = FlycutConfig().setMetadata(item, {"flycut": state, "config": copy.deepcopy(rendered_config)})
-            if submit and item["name"] != name:
-                # Direct, because `Item.validate` is what changed the name in the
-                # first place: `createItem` appends `(n)` on a collision, and a
-                # submitted configuration's name has to be exactly its stack's.
-                Item().collection.update_one({"_id": item["_id"]}, {"$set": {"name": name}})
-                item["name"] = name
-        return FlycutConfig().filter(save_config_file(item, user, rendered_config), user)
+            item = self._create(name, state, rendered, stack, submit, user, policy)
+        return FlycutConfig().filter(save_config_file(item, user, rendered), user)
 
     @access.user
     @autoDescribeRoute(

@@ -45,9 +45,9 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 `phase-6c-metadata` (`F3`).
 
 **`docs/BACKEND_REVIEW.md` is the working document for what is left on the Python side** —
-seven items, each measured. Items 1 (the only correctness one), 2, 3 and 5 landed on
-`redis-stack-lock`, `perf-listing-n1` and `model-owns-its-writes`; three are left, none a
-bug. It is disposable; delete it when the last one lands.
+seven items, each measured. Items 1 (the only correctness one), 2, 3, 4 and 5 landed on
+`redis-stack-lock`, `perf-listing-n1`, `model-owns-its-writes` and `split-save-config`;
+two are left, neither a bug. It is disposable; delete it when the last one lands.
 
 ### Where things stand
 
@@ -67,7 +67,7 @@ What Phase 6 changed, in case it is not obvious from the tree:
 - **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs a view
   and sets its `el` but never calls `render()`.
 
-`pytest tests` is 101 tests at 89% coverage; `node test/browser/verify.cjs` is 89 checks
+`pytest tests` is 113 tests at 89% coverage; `node test/browser/verify.cjs` is 89 checks
 and is the only thing that renders the UI.
 
 The conventions the client settled on, which anything added to it should follow:
