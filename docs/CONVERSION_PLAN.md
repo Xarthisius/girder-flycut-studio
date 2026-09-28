@@ -20,15 +20,14 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 
 ## Progress
 
-**Closed (28).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B4 B5 · C1 C2 C3 C4 C5 C7 · D1 D2 D3 ·
-E1 E2 E3 E4 E5 · F2 F4.
+**Closed (29).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B4 B5 · C1 C2 C3 C4 C5 C7 · D1 D2 D3 ·
+E1 E2 E3 E4 E5 E6 · F2 F4.
 
-**Untouched (5).**
+**Untouched (4).**
 
 | Issue | What is left | Phase |
 |---|---|---|
-| **E6** | The `rest.py` split | 5 — *in progress* |
-| **C6 E7 G1** | The config page and the four endpoints behind it | 6 |
+| **C6 E7 G1** | The config page and the four endpoints behind it | 6 — *next* |
 | **F1 F3** | The vendored dependency; package metadata | 6 |
 
 **Phase 4 is complete.** Every Critical and every web-client convention issue is closed.
