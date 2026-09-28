@@ -14,6 +14,7 @@ Environment:
     GIRDER_ADMIN     default admin
     GIRDER_PASSWORD  default adminpassword
 """
+
 import base64
 import json
 import os
@@ -29,7 +30,7 @@ PASSWORD = os.environ.get("GIRDER_PASSWORD", "adminpassword")
 COLLECTION = "Flyer Studio E2E"
 WORKSPACE = "Workspace"
 FOIL_TITLE = "E2E aluminium foil"
-DOI_PREFIX = "10.5072"     # DataCite's reserved test prefix, for local allocation
+DOI_PREFIX = "10.5072"  # DataCite's reserved test prefix, for local allocation
 # The IGSN prefix is structured, not arbitrary: institution (2) + lab (1) +
 # material (2) + subcategory (1), validated against jsonforms' vocabularies.
 # JHAMAB is Johns Hopkins / HEMI / metals and alloys, the same value the
@@ -92,8 +93,7 @@ def ensure_assetstore():
     if existing:
         return existing[0]
     root = os.environ.get("GIRDER_ASSETSTORE_ROOT", "/tmp/girder_flycut_e2e_assetstore")
-    return call("POST", "assetstore", body={
-        "type": 0, "name": "Flyer Studio E2E", "root": root})
+    return call("POST", "assetstore", body={"type": 0, "name": "Flyer Studio E2E", "root": root})
 
 
 def find_or_create_collection(name):
@@ -104,12 +104,12 @@ def find_or_create_collection(name):
 
 
 def find_or_create_folder(parent_id, name):
-    existing = call("GET", "folder", {
-        "parentType": "collection", "parentId": parent_id, "name": name, "limit": 1})
+    existing = call("GET", "folder", {"parentType": "collection", "parentId": parent_id, "name": name, "limit": 1})
     if existing:
         return existing[0]
-    return call("POST", "folder", body={
-        "parentType": "collection", "parentId": parent_id, "name": name, "public": "true"})
+    return call(
+        "POST", "folder", body={"parentType": "collection", "parentId": parent_id, "name": name, "public": "true"}
+    )
 
 
 def find_or_create_foil():
@@ -121,7 +121,8 @@ def find_or_create_foil():
         titles = meta.get("titles") or [{}]
         alternates = meta.get("alternateIdentifiers") or []
         if titles[0].get("title") == FOIL_TITLE and any(
-                alt.get("alternateIdentifier") == "foil-igsn" for alt in alternates):
+            alt.get("alternateIdentifier") == "foil-igsn" for alt in alternates
+        ):
             return entry
     metadata = {
         "titles": [{"title": FOIL_TITLE}],
@@ -133,8 +134,7 @@ def find_or_create_foil():
             {"alternateIdentifier": "foil-igsn", "alternateIdentifierType": "Local"},
         ],
     }
-    return call("POST", "deposition", body={
-        "metadata": json.dumps(metadata), "prefix": IGSN_PREFIX, "track": "false"})
+    return call("POST", "deposition", body={"metadata": json.dumps(metadata), "prefix": IGSN_PREFIX, "track": "false"})
 
 
 def main():
@@ -171,8 +171,7 @@ def main():
     dashboards = call("GET", "dashboard", {"includeDisabled": "true"}) or []
     flycut = next((d for d in dashboards if d["key"] == "flycut-config"), None)
     if not flycut:
-        raise SystemExit(
-            "seed: the flycut-config dashboard is not registered. Is the plugin loaded?")
+        raise SystemExit("seed: the flycut-config dashboard is not registered. Is the plugin loaded?")
 
     settings = {
         "workspace_folder_id": workspace["_id"],
@@ -183,13 +182,14 @@ def main():
         "public_igsn": False,
         "public_files": False,
     }
-    call("PUT", f"dashboard/{flycut['_id']}", body={
-        "settings": json.dumps(settings), "enabled": "true"})
+    call("PUT", f"dashboard/{flycut['_id']}", body={"settings": json.dumps(settings), "enabled": "true"})
     print(f"  dashboard {flycut['_id']} enabled, workspace configured")
 
-    print(json.dumps({"dashboardId": flycut["_id"],
-                      "workspaceFolderId": workspace["_id"],
-                      "collectionId": collection["_id"]}))
+    print(
+        json.dumps(
+            {"dashboardId": flycut["_id"], "workspaceFolderId": workspace["_id"], "collectionId": collection["_id"]}
+        )
+    )
     return 0
 
 

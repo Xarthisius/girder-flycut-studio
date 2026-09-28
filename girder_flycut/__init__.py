@@ -1,4 +1,5 @@
 """Girder integration for the Flyer configuration builder."""
+
 import logging
 from pathlib import Path
 
@@ -21,22 +22,26 @@ class FlycutPlugin(GirderPlugin):
         from .rest import Flycut, ensure_lock_expiry
         from .settings import DEFAULTS, validate_dashboard
 
-        events.bind('model.dashboard.save', 'flycut.settings', validate_dashboard)
+        events.bind("model.dashboard.save", "flycut.settings", validate_dashboard)
 
         getPlugin("dashboards").load(info)
         registerDashboard(
-            KEY, name="Flyer Studio",
+            KEY,
+            name="Flyer Studio",
             description="Configure flyer stacks, generate LightBurn files, and register stack IGSNs.",
-            icon="icon-cog", settings=DEFAULTS,
+            icon="icon-cog",
+            settings=DEFAULTS,
         )
         self._renameLegacyDashboard()
         # Neither of these may abort the load: a plugin that refuses to import
         # takes the whole Girder server with it, and everything below is a
         # convenience rather than a precondition for serving requests.
-        self._guard('could not add the stack-lock TTL index', ensure_lock_expiry)
+        self._guard("could not add the stack-lock TTL index", ensure_lock_expiry)
         info["apiRoot"].flycut = Flycut()
         registerPluginStaticContent(
-            plugin="flycut", css=["/style.css"], js=["/girder-plugin-flycut.umd.cjs"],
+            plugin="flycut",
+            css=["/style.css"],
+            js=["/girder-plugin-flycut.umd.cjs"],
             staticDir=Path(__file__).parent / "web_client" / "dist",
             tree=info["serverRoot"],
         )
@@ -46,7 +51,7 @@ class FlycutPlugin(GirderPlugin):
         try:
             action()
         except Exception:
-            logger.exception('flycut: %s', message)
+            logger.exception("flycut: %s", message)
 
     @classmethod
     def _renameLegacyDashboard(cls):
@@ -60,9 +65,9 @@ class FlycutPlugin(GirderPlugin):
         """
 
         def rename():
-            existing = Dashboard().findOne({'key': KEY, 'name': 'Flyer Config Studio'})
+            existing = Dashboard().findOne({"key": KEY, "name": "Flyer Config Studio"})
             if existing:
-                existing['name'] = 'Flyer Studio'
+                existing["name"] = "Flyer Studio"
                 Dashboard().save(existing)
 
-        cls._guard('could not rename the legacy dashboard document', rename)
+        cls._guard("could not rename the legacy dashboard document", rename)
