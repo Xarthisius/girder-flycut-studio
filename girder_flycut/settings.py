@@ -36,16 +36,24 @@ def policy():
     return {**copy.deepcopy(DEFAULTS), **(doc or {}).get("settings", {})}
 
 
-def validate_settings(settings):
-    result = {**copy.deepcopy(DEFAULTS), **settings}
-    defaults = result["laser_defaults"]
-    if not isinstance(defaults, dict) or set(defaults) != {
-        "maxPower",
-        "speed",
-        "QPulseWidth",
-        "frequency",
-        "numPasses",
-    }:
+# The policy's own shape, group by group. `validate_settings` runs them in this
+# order, which is the order the config page presents them in -- an operator
+# fixing one message at a time should not be sent back up the form.
+FLAGS = (
+    "creators_include_user",
+    "owners_include_user",
+    "editors_include_user",
+    "viewers_include_user",
+    "public_igsn",
+    "public_files",
+)
+PRINCIPALS = ("creators", "owners", "editors", "viewers")
+LASER_DEFAULTS = {"maxPower", "speed", "QPulseWidth", "frequency", "numPasses"}
+
+
+def _validate_laser_defaults(defaults):
+    """The starting values a new laser layer is built from."""
+    if not isinstance(defaults, dict) or set(defaults) != LASER_DEFAULTS:
         raise ValidationException("laser_defaults must contain maxPower, speed, QPulseWidth, frequency, and numPasses.")
     if (
         any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in defaults.values())
@@ -58,17 +66,22 @@ def validate_settings(settings):
             "Invalid laser_defaults: use finite positive speed, power 0–100, "
             "nonnegative values, and integer passes >= 1."
         )
-    for key in (
-        "creators_include_user",
-        "owners_include_user",
-        "editors_include_user",
-        "viewers_include_user",
-        "public_igsn",
-        "public_files",
-    ):
+
+
+def _validate_flags(result):
+    for key in FLAGS:
         if type(result[key]) is not bool:
             raise ValidationException(f"{key} must be a boolean.")
-    for key in ("creators", "owners", "editors", "viewers"):
+
+
+def _normalize_principals(result):
+    """Resolve each role's users and groups, dropping duplicates.
+
+    Stored by ID rather than by name, so a rename does not silently change who
+    a workspace belongs to -- and refused outright when the entity is gone,
+    because a policy naming a deleted group grants nothing and says nothing.
+    """
+    for key in PRINCIPALS:
         entries = result[key]
         if not isinstance(entries, list):
             raise ValidationException(f"{key} must be a list of users/groups.")
@@ -88,8 +101,15 @@ def validate_settings(settings):
             if ref not in normalized:
                 normalized.append(ref)
         result[key] = normalized
-    if not result["creators"] and not result["creators_include_user"]:
-        raise ValidationException("Configure an IGSN creator or include the registrant.")
+
+
+def _resolve_workspace(result):
+    """Settle the workspace on one folder, named both ways.
+
+    An ID and a path may both arrive; the ID wins, and whichever identified the
+    folder, both are written back from it. That is what keeps the setting
+    working after the folder is renamed or moved.
+    """
     destination = result.get("workspace_folder_id")
     path = result.get("workspace_path")
     if not isinstance(path, str) or not isinstance(destination, str):
@@ -106,13 +126,27 @@ def validate_settings(settings):
             raise ValidationException("Workspace path does not identify an existing collection folder.") from exc
         if resource and resource["model"] == "folder":
             folder = resource["document"]
-    if destination or path.strip():
-        if not folder or folder.get("baseParentType") != "collection":
-            raise ValidationException("Select a folder inside a Girder collection for the workspace.")
-        if not result["owners"] and not result["owners_include_user"]:
-            raise ValidationException("Configure an owner user/group, or include the acting user as owner.")
-        result["workspace_folder_id"] = str(folder["_id"])
-        result["workspace_path"] = getResourcePath("folder", folder, force=True)
+    if not destination and not path.strip():
+        # No workspace configured at all is a valid policy: the dashboard says
+        # so and refuses to save anything until an administrator sets one.
+        return
+    if not folder or folder.get("baseParentType") != "collection":
+        raise ValidationException("Select a folder inside a Girder collection for the workspace.")
+    if not result["owners"] and not result["owners_include_user"]:
+        raise ValidationException("Configure an owner user/group, or include the acting user as owner.")
+    result["workspace_folder_id"] = str(folder["_id"])
+    result["workspace_path"] = getResourcePath("folder", folder, force=True)
+
+
+def validate_settings(settings):
+    """The dashboard policy, checked group by group and returned normalised."""
+    result = {**copy.deepcopy(DEFAULTS), **settings}
+    _validate_laser_defaults(result["laser_defaults"])
+    _validate_flags(result)
+    _normalize_principals(result)
+    if not result["creators"] and not result["creators_include_user"]:
+        raise ValidationException("Configure an IGSN creator or include the registrant.")
+    _resolve_workspace(result)
     return result
 
 

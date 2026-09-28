@@ -44,9 +44,19 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 `phase-6a-drop-vendor` (`F1`), `phase-6b-config-page` (`C6`, `E7`, `G1`) and
 `phase-6c-metadata` (`F3`).
 
-**`docs/BACKEND_REVIEW.md` is the working document for what is left on the Python side** —
-seven items, each measured. Six have landed, one branch each; only `tidy-validators`
-(item 7) is left, and it is prose. It is disposable; delete it when that one lands.
+**The backend review is finished.** `docs/BACKEND_REVIEW.md` held seven measured items
+and is gone, as it said it should be; each landed on a branch of its own, in order:
+
+| branch | what it closed |
+|---|---|
+| `redis-stack-lock` | the stack mutex's two bugs; it is a Redis lock now, and fails closed |
+| `perf-listing-n1` | the three listing endpoints, from ~1000 round trips per dashboard open to twelve |
+| `model-owns-its-writes` | fifteen direct Mongo writes became eight, none of them a shortcut |
+| `split-save-config` | one 105-line function became nine, the longest 43 |
+| `drop-dead-lifecycle-state` | `meta.flycut.action`, written but never read |
+| `tidy-validators` | the two long validators split; the Crockford encoder named |
+
+What each one found that the review had not is in its commit message.
 
 ### Where things stand
 
@@ -66,7 +76,7 @@ What Phase 6 changed, in case it is not obvious from the tree:
 - **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs a view
   and sets its `el` but never calls `render()`.
 
-`pytest tests` is 114 tests at 89% coverage; `node test/browser/verify.cjs` is 89 checks
+`pytest tests` is 138 tests at 89% coverage; `node test/browser/verify.cjs` is 89 checks
 and is the only thing that renders the UI.
 
 The conventions the client settled on, which anything added to it should follow:
@@ -203,7 +213,8 @@ girder_flycut/
     package.json         the client's own build; the root one lints and tests
     vite.config.ts       the lib build, with the Pug plugin
     dist/                built, gitignored, shipped in the wheel
-tests/                   pytest (56: api, dashboard, models) + core.mjs, status.mjs,
+tests/                   pytest (138: api, dashboard, models, migrations, locks,
+                         model writes, listing cost, validators) + core.mjs, status.mjs,
                          workflow.cjs, complete_workflow.cjs, bundle.cjs
 test/browser/            seed.py + verify.cjs — the only thing that renders the UI
 ```

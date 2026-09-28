@@ -6,12 +6,13 @@ from reading it, which is why they are written down.
 """
 
 import copy
+import re
 from datetime import datetime
 
 import pytest
 from girder.exceptions import RestException
 
-from girder_flycut.rest.config import ConfigRoutes
+from girder_flycut.rest.config import ConfigRoutes, crockford
 
 ROUTES = ConfigRoutes()
 USER = {"_id": "6100000000000000000000ff"}
@@ -76,3 +77,42 @@ def test_state_inherits_overwrite_safe_from_the_draft_it_replaces():
     draft = {"meta": {"flycut": {"overwriteSafe": False}}}
     assert ROUTES._state(draft, "ws", USER, {}, submit=True)["overwriteSafe"] is False
     assert ROUTES._state({"meta": {"flycut": {}}}, "ws", USER, {}, submit=True)["overwriteSafe"] is True
+
+
+# The Crockford encoder `next_stack_id` searches with. It was inline, and its
+# overflow guard -- `if value: break` -- read like a bug rather than the thing
+# that stops the search wrapping around onto IDs it has already handed out.
+
+
+@pytest.mark.parametrize(
+    ("number", "expected"),
+    [
+        (0, "00000"),
+        (1, "00001"),
+        (9, "00009"),
+        # Crockford omits I, L, O and U: 17 is H and 18 is J, where a plain
+        # base-32 alphabet would have put I.
+        (10, "0000A"),
+        (17, "0000H"),
+        (18, "0000J"),
+        (31, "0000Z"),
+        (32, "00010"),
+        (32**5 - 1, "ZZZZZ"),
+    ],
+)
+def test_crockford_encodes_five_characters(number, expected):
+    assert crockford(number) == expected
+
+
+def test_crockford_refuses_to_wrap_around():
+    """The guard that was `if value: break`: past the width, there is no ID left."""
+    assert crockford(32**5) is None
+    assert crockford(32**5 + 1) is None
+    assert crockford(32**2, width=2) is None
+    assert crockford(32**2 - 1, width=2) == "ZZ"
+
+
+def test_every_encoding_is_one_the_validator_accepts():
+    """The two alphabets have to agree, or the server hands out an ID it will refuse."""
+    for number in (0, 1, 31, 32, 1023, 32**4):
+        assert re.fullmatch(r"[0-9A-HJKMNP-TV-Z]{5}", crockford(number))

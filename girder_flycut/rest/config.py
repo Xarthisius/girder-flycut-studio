@@ -35,6 +35,24 @@ EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 # Read once per item in `stack_states`, so it does not belong inside the loop.
 STACK_RANK = {"submitted": 1, "restricted": 2, "generated": 3, "registered": 4}
 
+# Crockford's Base32, which omits I, L, O and U so that a stack ID written on a
+# sample cannot be read back as a digit. `validation` accepts exactly this set.
+CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def crockford(value, width=5):
+    """``value`` as ``width`` Crockford Base32 characters, or None if it will not fit.
+
+    Returning None rather than a truncated string is what stops `next_stack_id`
+    wrapping around and offering an ID it has already handed out: at width 5
+    that is anything from 32**5 upward, which no workspace will reach.
+    """
+    digits = ""
+    for _ in range(width):
+        digits = CROCKFORD[value % 32] + digits
+        value //= 32
+    return None if value else digits
+
 
 def _saved_at(record):
     value = record.get("savedAt")
@@ -109,15 +127,16 @@ class ConfigRoutes:
     @autoDescribeRoute(Description("Lowest unused five-character Crockford stack ID."))
     @gated
     def next_stack_id(self):
+        """The lowest ID no configuration in the instance has claimed.
+
+        Counting up from zero and stopping at the first miss: with N used IDs
+        one of the first N+1 is always free, so this terminates without a
+        second query.
+        """
         used = {FlycutConfig().stackId(item) for item in Item().find(CONFIG_QUERY)}
-        alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
         for number in range(len(used) + 1):
-            value = number
-            candidate = ""
-            for _ in range(5):
-                candidate = alphabet[value % 32] + candidate
-                value //= 32
-            if value:
+            candidate = crockford(number)
+            if candidate is None:
                 break
             if candidate not in used:
                 return {"stackid": candidate}
