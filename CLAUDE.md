@@ -41,6 +41,9 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 ### Where to pick up
 
 **Phase 5, server-side alignment.** Nothing on the client is outstanding.
+**`docs/HANDOFF_PHASES_5_6.md` is the working document for what remains** — ordering,
+file anchors, the measurements behind each step, and the two things to decide first. It
+is disposable; delete it when Phase 6 lands.
 
 - **`FlycutConfig` model** registered with `ModelImporter.registerModel`, owning
   `validate()`, lifecycle and workspace containment — the logic now spread across `gate`,
