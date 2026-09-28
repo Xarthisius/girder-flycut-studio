@@ -45,9 +45,9 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 `phase-6c-metadata` (`F3`).
 
 **`docs/BACKEND_REVIEW.md` is the working document for what is left on the Python side** —
-seven items, each measured. Item 1, the only correctness one, landed on
-`redis-stack-lock`; six are left, none a bug. It is disposable; delete it when the last
-one lands.
+seven items, each measured. Items 1 (the only correctness one) and 2 landed on
+`redis-stack-lock` and `perf-listing-n1`; five are left, none a bug. It is disposable;
+delete it when the last one lands.
 
 ### Where things stand
 
@@ -67,7 +67,7 @@ What Phase 6 changed, in case it is not obvious from the tree:
 - **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs a view
   and sets its `el` but never calls `render()`.
 
-`pytest tests` is 72 tests at 88% coverage; `node test/browser/verify.cjs` is 89 checks
+`pytest tests` is 86 tests at 89% coverage; `node test/browser/verify.cjs` is 89 checks
 and is the only thing that renders the UI.
 
 The conventions the client settled on, which anything added to it should follow:
@@ -180,7 +180,8 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 girder_flycut/
   __init__.py            FlycutPlugin.load() — registers the models, the dashboard and
                          the REST resource
-  models/                FlycutConfig, an Item subclass, registered with ModelImporter
+  models/                FlycutConfig, an Item subclass, registered with ModelImporter,
+                         and WorkspaceScope, the containment rule resolved once
   rest/                  17 routes under /api/v1/flycut, as four mixins over GateMixin —
                          settings, template, config, lifecycle — plus gate, locking, catalog
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
@@ -231,6 +232,15 @@ anything touching the UI.
 
 ## Traps
 
+- **Anything that iterates configurations must resolve the workspace scope once.**
+  `FlycutConfig.inWorkspace()` is the containment rule *and*, through the folder it
+  resolves, the item ACL — so calling it per item is an N+1 that nothing fails on. The
+  three listing endpoints each cost `N+2` `Dashboard.findOne` and up to `3N`
+  `Folder.load` for exactly that reason; `FlycutConfig.workspaceScope()` answers both
+  questions for a whole request from two folder queries. Pass it to `inWorkspace`,
+  `contains`, `hasAccess` and `filter`, and narrow the query with `scope.query()`.
+  `tests/test_listing_cost.py` counts the queries at two workspace sizes and fails if
+  either grows.
 - **`ruff format` reaches into Markdown.** It formats Python inside fenced code blocks in
   `.md` files too, so a docs-only change can fail the lint gate. `ruff check .` does not
   catch it — run `ruff format --check .` as well, which is what CI does.

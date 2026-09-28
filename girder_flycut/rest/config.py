@@ -31,6 +31,10 @@ from .locking import stack_locked
 # their own kind; this puts them on one scale.
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
+# Which lifecycle stage wins when one stack ID has several configurations.
+# Read once per item in `stack_states`, so it does not belong inside the loop.
+STACK_RANK = {"submitted": 1, "restricted": 2, "generated": 3, "registered": 4}
+
 
 def _saved_at(record):
     value = record.get("savedAt")
@@ -57,16 +61,16 @@ class ConfigRoutes:
     @autoDescribeRoute(Description("Stack reuse rules for the current user."))
     @gated
     def stack_states(self, user):
+        scope = FlycutConfig().workspaceScope()
         result = {}
-        for item in Item().find({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}}):
+        for item in Item().find(scope.query({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}})):
             stack = str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip().upper()
             status = FlycutConfig().lifecycle(item)
             if (
-                not FlycutConfig().inWorkspace(item) or not Item().hasAccess(item, user, AccessType.WRITE)
+                not FlycutConfig().inWorkspace(item, scope) or not scope.hasAccess(item, user, AccessType.WRITE)
             ) and status == "submitted":
                 status = "restricted"
-            rank = {"submitted": 1, "restricted": 2, "generated": 3, "registered": 4}
-            if rank[status] > rank.get(result.get(stack), 0):
+            if STACK_RANK[status] > STACK_RANK.get(result.get(stack), 0):
                 result[stack] = status
         return result
 
@@ -86,13 +90,13 @@ class ConfigRoutes:
     @autoDescribeRoute(Description("List your latest 100 configurations."))
     @gated
     def configs(self, user):
-        workspace_id = studio_settings.policy()["workspace_folder_id"]
-        if not workspace_id:
+        scope = FlycutConfig().workspaceScope()
+        if not scope:
             return []
         records = [
-            FlycutConfig().filter(i, user)
-            for i in Item().find(CONFIG_QUERY)
-            if FlycutConfig().inWorkspace(i) and Item().hasAccess(i, user, AccessType.READ)
+            FlycutConfig().filter(i, user, scope=scope)
+            for i in Item().find(scope.query(CONFIG_QUERY))
+            if scope.contains(i) and scope.hasAccess(i, user, AccessType.READ)
         ]
         return sorted(records, key=_saved_at, reverse=True)[:100]
 
@@ -124,12 +128,13 @@ class ConfigRoutes:
         raise RestException("No available Stack IDs remain.")
 
     def submitted_stack_ids(self, user):
-        records = Item().find({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}})
+        scope = FlycutConfig().workspaceScope()
+        records = Item().find(scope.query({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}}))
         return sorted(
             {
                 str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip()
                 for item in records
-                if FlycutConfig().inWorkspace(item) and Item().hasAccess(item, user, AccessType.READ)
+                if scope.contains(item) and scope.hasAccess(item, user, AccessType.READ)
             }
             - {""}
         )
@@ -146,6 +151,10 @@ class ConfigRoutes:
     @gated
     @stack_locked
     def save_config(self, config, name="", id="", submit=False, validated=False, user=None):
+        # One read of the policy for the whole call: it is a `Dashboard.findOne`
+        # plus a deepcopy, and five places below want the same answer from it.
+        policy = studio_settings.policy()
+        workspace_id = policy["workspace_folder_id"]
         if len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
             raise RestException("Configuration exceeds 256 KB.")
         rendered_config = copy.deepcopy(config) if "run_parameters" in config else pack(config)
@@ -186,20 +195,24 @@ class ConfigRoutes:
             "overwriteSafe": existing["meta"]["flycut"].get("overwriteSafe", True) if existing else True,
             "createdBy": str(user["_id"]),
             "savedAt": datetime.now(timezone.utc),
-            "workspaceId": studio_settings.policy()["workspace_folder_id"],
+            "workspaceId": workspace_id,
         }
         if not submit:
             state["customFieldRows"] = config.get("custom_field_rows", [])
         if submit:
             state["submittedAt"] = state["savedAt"]
             matches = self.stack_matches(stack)
+            # `stack_matches` deliberately searches the whole instance, so a
+            # collision outside this workspace is still reported as someone
+            # else's stack rather than silently overwritten.
+            scope = FlycutConfig().workspaceScope(policy)
             for match in matches:
                 lifecycle = FlycutConfig().lifecycle(match)
                 if lifecycle == "registered":
                     raise RestException("This Stack ID is registered and cannot be reused.", code=409)
                 if lifecycle == "generated":
                     raise RestException("Delete the generated files before reusing this Stack ID.", code=409)
-                if not FlycutConfig().inWorkspace(match) or not Item().hasAccess(match, user, AccessType.WRITE):
+                if not FlycutConfig().inWorkspace(match, scope) or not Item().hasAccess(match, user, AccessType.WRITE):
                     raise RestException("This Stack ID belongs to another user.", code=409)
             if matches:
                 if not validated:
@@ -218,9 +231,9 @@ class ConfigRoutes:
                     },
                 )
                 for duplicate in matches[1:]:
-                    remove_config(duplicate, studio_settings.policy()["workspace_folder_id"])
+                    remove_config(duplicate, workspace_id)
                 if existing and existing["_id"] != target["_id"]:
-                    remove_config(existing, studio_settings.policy()["workspace_folder_id"])
+                    remove_config(existing, workspace_id)
                 return FlycutConfig().filter(
                     save_config_file(Item().load(target["_id"], force=True), user, rendered_config), user
                 )
@@ -246,7 +259,7 @@ class ConfigRoutes:
             ):
                 raise RestException("A folder for this stack already exists in the workspace.", code=409)
             folder = Folder().createFolder(parent, folder_name, creator=user, public=False)
-            folder = studio_settings.apply_access(Folder(), folder, studio_settings.policy(), user)
+            folder = studio_settings.apply_access(Folder(), folder, policy, user)
             # Through the model, not Item(), so FlycutConfig.validate() runs on the
             # one write that brings a configuration into existence.
             item = FlycutConfig().createItem(name, creator=user, folder=folder)
