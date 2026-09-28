@@ -50,6 +50,6 @@ live outside it.
 ## Related dependencies
 
 This dependency stays separate because it provides the IGSN service and carries its own
-deployment requirements and frontend. `vendor/girder-dashboards` ships the dashboards
-dependency with its original licence; install it before Flyer Studio. No database,
+deployment requirements and frontend. girder-dashboards is a pinned PyPI dependency
+(`girder-dashboards==0.2.0`), installed before Flyer Studio. No database,
 assetstore, credentials, or local preview launcher is bundled.

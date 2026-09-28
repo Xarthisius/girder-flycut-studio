@@ -182,7 +182,6 @@ girder_flycut/
 tests/                   pytest (56: api, dashboard, models) + core.mjs, status.mjs,
                          complete_workflow.cjs, bundle.cjs
 test/browser/            seed.py + verify.cjs — the only thing that renders the UI
-vendor/girder-dashboards/  a committed snapshot of the dependency  (F1; Phase 6 deletes it)
 ```
 
 ## Conventions

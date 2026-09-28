@@ -6,8 +6,8 @@ measurements taken on 2026-09-27. **Delete this file when Phase 6 lands.**
 
 | | |
 |---|---|
-| **Closed** | 29 of 33. **Phases 0–5 complete.** |
-| **Left** | 4 — `C6 E7 F1 F3 G1` is Phase 6, and all that remains. |
+| **Closed** | 30 of 33. Phases 0–5 complete; `F1` done. |
+| **Left** | 3 — `C6 E7 G1` (the config page) and `F3`. |
 | **Baseline** | PR #11 is merged. `E5` and `B4` landed on `phase-5a-imports-and-format`. |
 
 **Line numbers below predate `B4`.** The formatter rewrapped 18 files and grew
@@ -184,7 +184,14 @@ Exit: no REST module over ~250 lines, and a configuration's rules in one file.
 
 Five issues. `F1` first: it is the cheapest and it unblocks a simpler CI.
 
-### `F1` — delete `vendor/`, and it is safer than recorded
+### ~~`F1`~~ — delete `vendor/`, and it is safer than recorded  ✅
+
+**Done in 6a**, and the byte-identical claim below was re-verified by sha256 rather than
+taken on trust. **Step 2 below is wrong**: the two workflow lines cannot just be deleted,
+because both jobs install the plugin with `--no-deps`, so nothing would pull
+girder-dashboards in. They were replaced with `pip install "girder-dashboards==0.2.0"`, and
+`docs/INSTALLATION.md` had the same shape and the same fix. Four more references the list
+below misses: `.eslintrc.json`, `ruff.toml`, `docs/DEVELOPMENT.md`, `docs/INSTALLATION.md`.
 
 **The plan calls the vendored copy "stale". It is not.** Measured:
 
