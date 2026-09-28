@@ -220,6 +220,13 @@ anything touching the UI.
 
 ## Traps
 
+- **A pytest suite must name every plugin whose events it depends on.**
+  `@pytest.mark.plugin` markers stack, and pytest_girder loads only what they name — so
+  `plugin("flycut")` alone leaves girder-jsonforms' bindings unregistered and a whole
+  class of test silently unable to fail. `coerce_metadata_dates` on `model.item.save` is
+  the one that matters: it rewrites ISO-8601 strings anywhere under `meta` into datetimes,
+  which is why the config snapshot is re-written with `$set` after every model save.
+  `tests/test_jsonforms_hooks.py` asserts the bindings are there.
 - **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs the
   view and sets its `el`, but never calls `render()`. A `ConfigView` that does not render
   from `initialize()` routes correctly, throws nothing, and draws an empty page.
