@@ -6,8 +6,8 @@ measurements taken on 2026-09-27. **Delete this file when Phase 6 lands.**
 
 | | |
 |---|---|
-| **Closed** | 28 of 33. Phases 0–4 complete; Phase 5 steps 1–3 done. |
-| **Left** | 5 — `E6` (Phase 5) and `C6 E7 F1 F3 G1` (Phase 6) |
+| **Closed** | 29 of 33. **Phases 0–5 complete.** |
+| **Left** | 4 — `C6 E7 F1 F3 G1` is Phase 6, and all that remains. |
 | **Baseline** | PR #11 is merged. `E5` and `B4` landed on `phase-5a-imports-and-format`. |
 
 **Line numbers below predate `B4`.** The formatter rewrapped 18 files and grew
@@ -61,8 +61,8 @@ What it does *not* cover, so change these with care:
 
 ## Phase 5 — server-side alignment
 
-~~Step 1 (`E5`)~~, ~~Step 2 (`B4`)~~ and ~~Step 3 (`E4`/`E2`)~~ are done; they are kept
-below for the record. **Resume at Step 4.**
+**All four steps are done**; they are kept below for the record. **Phase 5 is complete —
+resume at Phase 6.**
 
 Four issues: `E5`, `B4`, `E4`/`E2`, `E6`. **Do them in that order.** Formatting before
 restructuring keeps the restructuring diff readable; hoisting imports before formatting
@@ -158,7 +158,15 @@ is what it exists for.
 breaks the UI silently — pytest asserts on it, but the browser harness is what proves the
 pickers still populate. Run both.
 
-### Step 4 — `E6`: split `rest.py`
+### ~~Step 4~~ — `E6`: split `rest.py`  ✅
+
+**Done**, as four route mixins over a `GateMixin`, not the three modules below: a single
+`config.py` would have been near 450 lines, because `save_config` is 112 and
+`register_config` 139. Largest module is now 284. Two things the plan did not anticipate
+— `find_packages(include=["girder_flycut"])` matched only the top-level package, so the
+`models/` subpackage added in 5b was already missing from the wheel; and renaming the `id`
+parameter for `modelParam` left three bare `id` references silently resolving to the
+builtin, which no linter can see. An AST walk found them.
 
 684 lines, 18 routes. Into `rest/config.py`, `rest/template.py`, `rest/settings.py`, per
 the plan. Two things go with it:

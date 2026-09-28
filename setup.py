@@ -4,7 +4,7 @@ setup(
     name="girder-flycut",
     version="1.0.0",
     description="Flyer Studio configuration, generation, and IGSN registration for Girder",
-    packages=find_packages(include=["girder_flycut"]),
+    packages=find_packages(include=["girder_flycut", "girder_flycut.*"]),
     package_data={
         "girder_flycut": [
             "catalog.json",

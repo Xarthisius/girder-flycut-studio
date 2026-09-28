@@ -37,12 +37,14 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 
 **Phase 4 is complete** — 25 of 33 closed.
 
-**In flight:** `phase-5b-models`, one commit, not yet a PR. `E4`, and `E2` formalised.
-`phase-5a-imports-and-format` (`E5`, `B4`) is three commits ahead of it, also unmerged.
+**Phase 5 is complete** — 29 of 33 closed. Three branches stacked and unmerged:
+`phase-5a-imports-and-format` (`E5`, `B4`), `phase-5b-models` (`E4`, `E2`) and
+`phase-5c-rest-split` (`E6`). Each needs its own PR, in that order.
 
 ### Where to pick up
 
-**Phase 5, server-side alignment.** Nothing on the client is outstanding.
+**Phase 6, packaging and the last mile.** Nothing on the client or the server is
+outstanding.
 **`docs/HANDOFF_PHASES_5_6.md` is the working document for what remains** — ordering,
 file anchors, the measurements behind each step, and the two things to decide first. It
 is disposable; delete it when Phase 6 lands.
@@ -51,9 +53,9 @@ is disposable; delete it when Phase 6 lands.
   subclasses `Item`, because a configuration *is* an item carrying `meta.flycut`. Note
   `validate()` is only reachable on the creation path: every other configuration write is
   a partial `update_one` on nested fields that never touches the model.
-- **Split `rest.py`** — 684 lines, 18 routes — into `rest/config.py`, `rest/template.py`,
-  `rest/settings.py`; replace the 14 `self.gate()` calls with one decorator and use
-  `modelParam` where a document is loaded by id. *(`E6`)*
+- ~~**Split `rest.py`.** *(`E6`)*~~ Done in 5c, as four route mixins rather than three
+  modules — `save_config` and `register_config` alone are 250 lines. `@gated` replaced the
+  14 `self.gate()` calls, and `modelParam` the five routes that load a document by id.
 - ~~**Hoist every function-local import.** *(`E5`)*~~ Done in 5a. Two sites stay
   deferred and say why: the circular pair in `FlycutPlugin.load()`, and
   `girder_jsonforms` in `materials.py` and `rest.py`, whose `register_config()` site is
@@ -126,6 +128,11 @@ no external registry is contacted while `jsonforms.igsn_service_url` is empty.
 
 None of these are inferable from the code. Each one cost a red CI run or worse.
 
+- **The live instance reloads changed code by itself.** It bind-mounts this tree and
+  restarts only the server inside the container, so `docker service update --force` is
+  ~85 seconds of waiting for nothing. If a bad intermediate state was caught mid-edit and
+  the server died on a traceback, force it instead with
+  `docker exec --user=root -ti $(docker ps --filter=name=wt_girder -q) touch /girder-plugins/__init__.py`.
 - **Celery runs over Redis, not a separate broker.** `GIRDER_WORKER_BROKER` and
   `GIRDER_WORKER_BACKEND` are both `redis://…`. Creating a deposition fires
   `deposition.created`, whose JSONForms handler calls `.delay()`, which needs somewhere to
@@ -154,7 +161,8 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 ```
 girder_flycut/
   __init__.py            FlycutPlugin.load() — registers the dashboard and the REST resource
-  rest.py                18 routes under /api/v1/flycut  (684 lines; Phase 5 splits it)
+  rest/                  17 routes under /api/v1/flycut, as four mixins over GateMixin:
+                         settings, template, config, lifecycle; plus gate, locking, catalog
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
   generate.py engine.py  LightBurn, CSV and resolved JSON output
   web_client/
@@ -171,7 +179,7 @@ girder_flycut/
     package.json         the client's own build; the root one lints and tests
     vite.config.ts       the lib build, with the Pug plugin
     dist/                built, gitignored, shipped in the wheel
-tests/                   pytest (56) + core.mjs, status.mjs, workflow.cjs,
+tests/                   pytest (56: api, dashboard, models) + core.mjs, status.mjs,
                          complete_workflow.cjs, bundle.cjs
 test/browser/            seed.py + verify.cjs — the only thing that renders the UI
 vendor/girder-dashboards/  a committed snapshot of the dependency  (F1; Phase 6 deletes it)
