@@ -1,0 +1,19 @@
+<nav class="builder-nav"><button id="backWorkflowBtn" type="button" class="button ghost" aria-label="Back to workflow" title="Back to workflow">←</button><input id="saveAsName" type="text" placeholder="Save as…" aria-label="Save as" maxlength="160"><button id="saveGirderBtn" class="button primary" type="button">Save</button><span id="builderMode" aria-live="polite"></span><button id="editCopyBtn" type="button" class="button ghost hidden">Edit a copy</button></nav>
+  <main class="workspace">
+    <section class="form-pane" aria-label="Configuration form">
+      <div class="intro">
+        <h1>Configure Flyer Stack</h1>
+      </div>
+
+      <form id="configForm" novalidate><fieldset id="configFields"></fieldset></form>
+    </section>
+
+    <aside class="viewer-pane" aria-label="Configuration viewer">
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" data-tab="preview">Preview</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="json">JSON</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="status">Status</button>
+      </div>
+    </aside>
+  </main>
+  <div id="toast" class="toast" role="status"></div>

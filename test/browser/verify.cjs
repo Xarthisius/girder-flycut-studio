@@ -92,6 +92,37 @@ async function fillRequiredFields(page, pickMaterial) {
     return page.inputValue('#stackid');
 }
 
+/**
+ * Drag one laser card onto another, by dispatching the events the list listens
+ * for.
+ *
+ * Playwright's dragTo cannot grab the handle -- the card head sits over it --
+ * and a real drag would be testing Chromium rather than the handler. These are
+ * the four events the list actually binds, with the DataTransfer it reads and
+ * the clientY it uses to decide before-or-after.
+ */
+async function dragCard(page, fromIndex, toIndex, after = true) {
+    return page.evaluate(({ fromIndex, toIndex, after }) => {
+        const cards = [...document.querySelectorAll('.g-flycut-dashboard #laserList .laser-card')];
+        const handle = cards[fromIndex].querySelector('.drag-handle');
+        const target = cards[toIndex];
+        const dataTransfer = new DataTransfer();
+        const fire = (type, node, extra = {}) => node.dispatchEvent(
+            new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer, ...extra }));
+        fire('dragstart', handle);
+        const box = target.getBoundingClientRect();
+        const clientY = after ? box.bottom - 2 : box.top + 2;
+        fire('dragover', target, { clientY });
+        fire('drop', target, { clientY });
+        fire('dragend', handle);
+    }, { fromIndex, toIndex, after });
+}
+
+/** The layer names down the laser list, which is what a reorder rewrites. */
+async function laserOrder(page) {
+    return page.locator('#laserList .laser-card .laser-name').allInnerTexts();
+}
+
 async function textOf(page, selector) {
     return (await page.locator(selector).first().textContent().catch(() => '') || '').trim();
 }
@@ -447,6 +478,25 @@ async function reopen(page, base, id) {
         check('the last laser entry cannot be removed', await laserCards() === 1,
             await textOf(page, '#toast'));
 
+        // Entries are named for their position, so a reorder renames them --
+        // which is why the swatches move and the names do not.
+        await page.click('#addLaserBtn');
+        await page.waitForTimeout(300);
+        const colorsBefore = await page.locator('#laserList .color-swatch')
+            .evaluateAll((nodes) => nodes.map((node) => node.style.getPropertyValue('--swatch')));
+        await dragCard(page, 0, 1);
+        await page.waitForTimeout(400);
+        const colorsAfter = await page.locator('#laserList .color-swatch')
+            .evaluateAll((nodes) => nodes.map((node) => node.style.getPropertyValue('--swatch')));
+        check('dragging an entry past another swaps them',
+            colorsAfter[0] === colorsBefore[1] && colorsAfter[1] === colorsBefore[0],
+            `${colorsBefore.join(' ')} -> ${colorsAfter.join(' ')}`);
+        check('and the names still follow position',
+            (await laserOrder(page)).join() === ['Layer F1', 'Layer F2'].join(),
+            (await laserOrder(page)).join(' '));
+        await page.locator('#laserList .laser-card').last().locator('.remove-laser').click();
+        await page.waitForTimeout(300);
+
         // Custom fields reach the exported JSON, which is the only thing that
         // proves the rows are read rather than merely rendered.
         await page.click('#addCustomBtn');
@@ -504,6 +554,13 @@ async function reopen(page, base, id) {
         if (usable) {
             const runName = `e2e-${stackId}`;
             await page.fill('#saveAsName', runName);
+
+            // A second laser entry, so the configuration that comes back has a
+            // list worth trying to reorder when it is reopened read-only. The
+            // template has more layers than entries either way, so the extra one
+            // changes what is generated only by covering one more layer.
+            await page.click('#addLaserBtn');
+            await page.waitForTimeout(300);
 
             // Submitting is gated on acknowledging any validation warnings, and
             // the box lives in the Status tab.
@@ -567,6 +624,64 @@ async function reopen(page, base, id) {
                 { headers: { 'Girder-Token': token } })).json();
             check('the registered stack ID is locked against reuse',
                 states[stackId] === 'registered', `${stackId} -> ${states[stackId]}`);
+
+            // ---- viewing a saved configuration --------------------------
+            // Read-only had no coverage, and it is three separate mechanisms:
+            // a disabled fieldset, the write actions giving way to "Edit a
+            // copy", and the status panel reporting the lifecycle stage rather
+            // than what the form would still need.
+            await reopen(page, BASE, flycut._id);
+            await page.click('#configurationStepBtn');
+            await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 15000 });
+            // The picker groups by lifecycle stage; take the first option in
+            // the Registered group rather than matching on its label text.
+            const registeredId = await page.evaluate(() => document.querySelector(
+                '.g-flycut-dashboard #savedConfigs optgroup[label="Registered"] option')?.value);
+            await page.selectOption('#savedConfigs', registeredId);
+            check('a registered configuration is offered for viewing, not editing',
+                (await textOf(page, '#buildConfigBtn')) === 'View config',
+                await textOf(page, '#buildConfigBtn'));
+            await page.click('#buildConfigBtn');
+            await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 20000 });
+            // A disabled <fieldset> disables its descendants per spec, which is
+            // what actually matters -- and what a check on the fieldset itself
+            // would not see, since the property is set rather than the attribute.
+            check('the form is disabled outright',
+                await page.locator('#stackid').isDisabled() &&
+                await page.locator('#addLaserBtn').isDisabled(),
+                `fieldset.disabled=${await page.evaluate(
+                    () => document.querySelector('.g-flycut-dashboard #configFields').disabled)}`);
+            check('the status panel reports the lifecycle stage',
+                (await textOf(page, '#statusSummary')) === 'Registered',
+                await textOf(page, '#statusSummary'));
+            check('the write actions give way to Edit a copy',
+                await visible(page, '#editCopyBtn') &&
+                !(await visible(page, '#saveGirderBtn')) &&
+                !(await visible(page, '#submitConfigBtn')) &&
+                !(await visible(page, '#resetBtn')));
+            check('it says so rather than showing a save time',
+                (await textOf(page, '#builderMode')) === 'Read-only',
+                await textOf(page, '#builderMode'));
+            // A disabled fieldset does not stop a drag, so that is blocked
+            // separately -- and in the capture phase, ahead of the laser list's
+            // own handlers.
+            const orderBefore = await laserOrder(page);
+            if (orderBefore.length > 1) {
+                await dragCard(page, 0, orderBefore.length - 1);
+                await page.waitForTimeout(400);
+                check('reordering is blocked while read-only',
+                    (await laserOrder(page)).join() === orderBefore.join(),
+                    orderBefore.join(' '));
+            } else {
+                skip('reordering is blocked while read-only', 'only one laser entry to drag');
+            }
+            await page.screenshot({ path: `${SHOTS}/07b-read-only.png` });
+            await page.click('#editCopyBtn');
+            await page.waitForTimeout(400);
+            check('Edit a copy hands the form back',
+                !(await page.locator('#configFields').isDisabled()) &&
+                (await textOf(page, '#builderMode')).startsWith('Editing a copy'),
+                await textOf(page, '#builderMode'));
         } else {
             for (const name of ['submitting returns to the workflow and reports it',
                 'a submitted configuration is selectable for generation',
