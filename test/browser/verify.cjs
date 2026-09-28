@@ -362,6 +362,112 @@ async function reopen(page, base, id) {
             skip('status leaves Incomplete once required fields are set', 'same');
         }
 
+        // ---- the builder's own controls ---------------------------------
+        // The form, the laser table, the custom fields and the viewer tabs had
+        // no coverage at all: the walk above only proves the builder renders and
+        // that a filled form submits. 4e rewrites all of it into views, so this
+        // captures the behaviour first -- the same reason the harness itself was
+        // built before 4c rather than after.
+        const laserCards = () => page.locator('#laserList .laser-card').count();
+
+        // Tabs. Each panel is a sibling and only one carries .active.
+        await page.click('.g-flycut-dashboard [data-tab="json"]');
+        const shownJson = await textOf(page, '#jsonOutput');
+        check('the JSON tab shows the configuration as JSON',
+            shownJson.startsWith('{') && shownJson.includes('run_parameters'),
+            shownJson.slice(0, 40).replace(/\s+/g, ' '));
+        check('only one viewer panel is active at a time',
+            await page.locator('.viewer-panel.active').count() === 1);
+        await page.click('.g-flycut-dashboard [data-tab="preview"]');
+        check('the Preview tab comes back', await visible(page, '#canvas'));
+
+        // Zoom is the preview's own state and survives a redraw.
+        await page.click('#zoomIn');
+        check('zooming in reports the new scale',
+            (await textOf(page, '#zoomLabel')) === '110%', await textOf(page, '#zoomLabel'));
+        await page.click('#zoomOut');
+        check('and zooming back out returns to 100%',
+            (await textOf(page, '#zoomLabel')) === '100%', await textOf(page, '#zoomLabel'));
+
+        // Laser entries: add, name by position, remove, and the floor of one.
+        const startingLasers = await laserCards();
+        await page.click('#addLaserBtn');
+        await page.waitForFunction(
+            (n) => document.querySelectorAll('.g-flycut-dashboard #laserList .laser-card').length === n,
+            startingLasers + 1, { timeout: 10000 });
+        check('adding a laser entry names it for its position',
+            (await page.locator('#laserList .laser-card .laser-name').last().innerText()).trim() ===
+                `Layer F${startingLasers + 1}`,
+            await page.locator('#laserList .laser-card .laser-name').last().innerText());
+        check('the count follows the list',
+            (await textOf(page, '#laserCount')).startsWith(`${startingLasers + 1} /`),
+            await textOf(page, '#laserCount'));
+
+        // Colours are how the preview and the generated file tell layers apart,
+        // so two entries may not share one.
+        const firstHex = page.locator('#laserList .laser-card .hex-editor').first();
+        const secondHex = page.locator('#laserList .laser-card .hex-editor').nth(1);
+        const keptColor = await firstHex.inputValue();
+        await secondHex.fill(keptColor);
+        await secondHex.press('Enter');
+        await page.waitForTimeout(400);
+        check('a duplicate colour is refused and the old one comes back',
+            (await secondHex.inputValue()).toLowerCase() !== keptColor.toLowerCase(),
+            `${keptColor} -> ${await secondHex.inputValue()}`);
+        check('and it says why', (await textOf(page, '#toast')).includes('unique six-digit hex'),
+            await textOf(page, '#toast'));
+        await secondHex.fill('#0a0b0c');
+        await secondHex.press('Enter');
+        await page.waitForTimeout(400);
+        check('a unique colour is accepted and stored uppercase',
+            (await page.locator('#laserList .laser-card .hex-editor').nth(1).inputValue()) === '#0A0B0C',
+            await page.locator('#laserList .laser-card .hex-editor').nth(1).inputValue());
+
+        // Switching an entry off greys its card without removing it.
+        const secondCard = page.locator('#laserList .laser-card').nth(1);
+        await secondCard.locator('[data-key="enabled"]').uncheck();
+        await page.waitForTimeout(400);
+        check('a disabled entry is marked unused',
+            (await page.locator('#laserList .laser-card').nth(1).getAttribute('class')).includes('unused'));
+        await page.locator('#laserList .laser-card').nth(1).locator('[data-key="enabled"]').check();
+        await page.waitForTimeout(400);
+
+        await page.locator('#laserList .laser-card').nth(1).locator('.remove-laser').click();
+        await page.waitForFunction(
+            (n) => document.querySelectorAll('.g-flycut-dashboard #laserList .laser-card').length === n,
+            startingLasers, { timeout: 10000 });
+        check('removing an entry puts the list back', await laserCards() === startingLasers);
+        // The form needs at least one entry, and says so rather than emptying.
+        while (await laserCards() > 1) {
+            await page.locator('#laserList .laser-card .remove-laser').last().click();
+            await page.waitForTimeout(250);
+        }
+        await page.locator('#laserList .laser-card .remove-laser').first().click();
+        await page.waitForTimeout(400);
+        check('the last laser entry cannot be removed', await laserCards() === 1,
+            await textOf(page, '#toast'));
+
+        // Custom fields reach the exported JSON, which is the only thing that
+        // proves the rows are read rather than merely rendered.
+        await page.click('#addCustomBtn');
+        await page.waitForSelector('#customList .custom-row', { timeout: 10000 });
+        const row = page.locator('#customList .custom-row').last();
+        await row.locator('[data-key="name"]').fill('batch_code');
+        await row.locator('[data-key="value"]').fill('QZ-19');
+        await page.waitForTimeout(400);
+        check('the custom field count follows the rows',
+            (await textOf(page, '#customCount')).startsWith('1 field'),
+            await textOf(page, '#customCount'));
+        await page.click('.g-flycut-dashboard [data-tab="json"]');
+        check('a custom field reaches the exported JSON',
+            (await textOf(page, '#jsonOutput')).includes('"batch_code"'));
+        await page.locator('#customList .custom-row').last().locator('.remove-custom').click();
+        await page.waitForTimeout(400);
+        check('removing the row takes it back out of the JSON',
+            !(await textOf(page, '#jsonOutput')).includes('batch_code'));
+        await page.click('.g-flycut-dashboard [data-tab="preview"]');
+        await page.screenshot({ path: `${SHOTS}/04b-builder-controls.png` });
+
         // ---- the unsaved-changes guard ----------------------------------
         // The riskiest thing C5 touches: canLeave() is synchronous today and one
         // of its callers is a capture-phase click handler.
