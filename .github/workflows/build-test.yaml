@@ -21,6 +21,20 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
+      # Cheap, and first: `vendor/` is gone and stays gone, because both
+      # dependencies are ordinary PyPI releases. It came back once already --
+      # anchoring `build/` to `/build/` un-ignored
+      # vendor/girder-dashboards/build/, and the very commit that deleted the
+      # vendored source swept its build output back in. `.gitignore` stops that
+      # recurring; this is what notices if something else does.
+      - name: Nothing is vendored
+        run: |
+          tracked=$(git ls-files vendor)
+          if [ -n "$tracked" ]; then
+            echo "::error::vendor/ is tracked again; both dependencies come from PyPI"
+            echo "$tracked"
+            exit 1
+          fi
       - name: Set up Python
         uses: actions/setup-python@v7
         with:

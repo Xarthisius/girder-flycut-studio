@@ -1,5 +1,5 @@
 # Development and CI dependencies. The runtime dependencies live in setup.py;
-# requirements.txt installs the vendored dashboards plugin plus this package.
+# requirements.txt pins both released dependencies and installs this package.
 pytest
 pytest-girder
 pytest-cov
