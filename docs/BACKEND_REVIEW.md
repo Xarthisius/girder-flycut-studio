@@ -12,8 +12,8 @@ the code. Line numbers drift, so each item names an anchor instead.
 |---|---|
 | **Python** | 2,628 lines across 27 modules |
 | **Tests** | 68 pytest at 88%, five Node suites, an 89-check browser harness |
-| **Done** | the correctness risks, the measured cost, and the model's writes — PR #21, #22, items 1–3 and 5 |
-| **Left** | three. None is a bug; each is clarity or dead weight |
+| **Done** | everything but the two smallest — PR #21, #22, items 1–5 |
+| **Left** | two. Neither is a bug; one is dead weight, one is prose |
 
 ---
 
@@ -262,7 +262,22 @@ what makes this safe — confirm that before converting each one.
 
 ---
 
-## 4. `save_config` is 111 lines
+## 4. `save_config` is 111 lines  *(done — `split-save-config`)*
+
+**Landed.** It is 43, of which five are a docstring — and the longest thing in
+`rest/config.py` rather than four times the next. Eight helpers came out of it:
+`_snapshot`, `_resolved`, `_name`, `_state`, `_refuse_stack_collision`, and one per
+persistence path (`_replace_submitted`, `_update_draft`, `_create`). None is over 23
+lines.
+
+The three persistence paths were the seam that mattered. They all ended in the same
+`save_config_file` and `filter` call, one of them written out a second time inside
+the collision branch; now each produces an item and there is one tail. What is left
+in the route reads as the only decision it actually makes.
+
+`tests/test_save_config_parts.py` pins the extracted pure helpers without a server --
+twelve tests in under a second. Three of the six name cases were not obvious from the
+nested ternary, which is the reason they are written down.
 
 One function doing: a size check, packing, a draft guard, submit-time validation,
 name derivation, state assembly, stack-collision arbitration across three
@@ -360,7 +375,7 @@ One per item, in this order. The first two are worth doing; the rest are tidying
 | ~~`redis-stack-lock`~~ | ~~1~~ | **done** — the only correctness item, and it deleted a model |
 | ~~`perf-listing-n1`~~ | ~~2~~ | **done** — the largest cost a user can feel |
 | ~~`model-owns-its-writes`~~ | ~~3 + 5~~ | **done** — the stack-ID helper fell out of the same work |
-| `split-save-config` | 4 | easier once the model owns the writes |
+| ~~`split-save-config`~~ | ~~4~~ | **done** — easier once the model owned the writes |
 | `drop-dead-lifecycle-state` | 6 | just `action` now; see the note there |
 | `tidy-validators` | 7 | independent, can go any time |
 
