@@ -54,3 +54,16 @@ def pack(config):
     if "createdBy" in config:
         result["createdBy"] = config["createdBy"]
     return result
+
+
+def stack_id(config):
+    """The stack ID a configuration claims, normalised the one way everything compares it.
+
+    Every comparison of two stack IDs -- the mutex's key, collision detection,
+    the reuse rules the client reads -- has to agree on this, and it used to be
+    written out by hand in four modules. `validate.normalize_config` already
+    refuses anything but `F###`, `F####` or five uppercase Crockford Base32
+    characters, so upper-casing is a no-op on a configuration that was ever
+    submitted; it is here for the ones that were not.
+    """
+    return str(unpack(config).get("run_params", {}).get("stackid", "")).strip().upper()

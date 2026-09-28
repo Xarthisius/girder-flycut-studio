@@ -10,7 +10,8 @@ from girder.models.folder import Folder
 from girder.models.item import Item
 
 from .. import settings as studio_settings
-from ..artifacts import configuration
+from ..artifacts import CONFIG_FIELD, configuration
+from ..schema import stack_id
 
 STATUSES = ("draft", "submitted", "generated", "registered")
 
@@ -198,6 +199,104 @@ class FlycutConfig(Item):
         rule, so it runs for every item a listing considers.
         """
         return (scope if scope is not None else self.workspaceScope()).contains(item)
+
+    def setState(self, item, unset=(), metadata=None, **fields):
+        """Record a lifecycle change, and return the configuration as stored.
+
+        **Reloads first, deliberately.** A caller holds a document it loaded
+        before the work it is now recording -- generation uploads files and
+        `claimBusy` flips `busy` in between -- and saving that copy back would
+        undo both.
+
+        Goes through ``save()``, so ``validate()`` runs on the writes that move
+        a configuration through its lifecycle and not only on the one that
+        creates it. That is safe as a whole-document write because every caller
+        holds the stack mutex; see ``rest/locking.py``. It is also why nothing
+        here changes ``name``: ``Item.validate`` renames on collision whenever
+        the name differs from what is stored, and a configuration's name is
+        derived from its stack ID and must not drift.
+
+        ``unset`` names ``meta.flycut`` fields to remove. ``metadata`` is
+        merged into ``meta`` itself, which is where a registered stack's own
+        identifiers live, beside rather than inside the lifecycle state.
+        """
+        doc = Item().load(item["_id"], force=True)
+        if doc is None:
+            return None
+        state = doc.setdefault("meta", {}).setdefault("flycut", {})
+        state.update(fields)
+        for key in unset:
+            state.pop(key, None)
+        if metadata:
+            doc["meta"].update(metadata)
+        return self.save(doc)
+
+    def claimBusy(self, item, action):
+        """Mark the configuration in progress, unless something already has.
+
+        A compare-and-swap, and not reducible to a read-modify-write: two
+        requests that both read ``busy: False`` would both proceed. It stays a
+        direct Mongo write for that reason.
+
+        Redundant-looking beside the stack mutex, which already excludes two
+        operations on one configuration -- but a Redis lock can expire while
+        its holder is still working, and a second request then acquires it
+        legitimately. This is what refuses the second generation in that
+        window.
+        """
+        return bool(
+            self.collection.update_one(
+                {"_id": item["_id"], "meta.flycut.busy": {"$ne": True}},
+                {"$set": {"meta.flycut.busy": True, "meta.flycut.action": action}},
+            ).modified_count
+        )
+
+    def claimStatus(self, item, expect, become):
+        """Move ``status`` from ``expect`` to ``become``. True if we got it.
+
+        The same compare-and-swap argument as :py:meth:`claimBusy`: two
+        requests that both read ``draft`` would both delete it.
+        """
+        return bool(
+            self.collection.update_one(
+                {"_id": item["_id"], "meta.flycut.status": expect},
+                {"$set": {"meta.flycut.status": become}},
+            ).modified_count
+        )
+
+    def replace(self, item, name, state, config, expect=None):
+        """Replace a configuration's name, lifecycle state and snapshot at once.
+
+        Stays a direct ``$set`` where :py:meth:`setState` does not, for two
+        reasons that have nothing to do with the metadata coercion that used to
+        force it. The name changes here, and ``Item.validate`` appends ``(n)``
+        to a name that collides with a sibling -- a configuration's name is
+        derived from its stack ID, so a silent rename is not acceptable. And
+        ``expect`` makes this a compare-and-swap: it is what stops a draft that
+        another request is submitting from being overwritten by this one.
+
+        Returns the stored document, or ``None`` when ``expect`` did not match.
+        """
+        query = {"_id": item["_id"]}
+        if expect is not None:
+            query["meta.flycut.status"] = expect
+        result = self.collection.update_one(
+            query,
+            {
+                "$set": {"name": name, "meta.flycut": state, CONFIG_FIELD: config},
+                # `meta.flycut` is replaced wholesale just above, which already
+                # drops the legacy `meta.flycut.config`; naming both a parent
+                # and its child in one update conflicts.
+                "$unset": {"meta.config": ""},
+            },
+        )
+        if not result.matched_count:
+            return None
+        return Item().load(item["_id"], force=True)
+
+    def stackId(self, item):
+        """The stack ID this configuration claims. See :py:func:`schema.stack_id`."""
+        return stack_id(configuration(item))
 
     def lifecycle(self, item):
         """Where ``item`` sits in draft -> submitted -> generated -> registered.

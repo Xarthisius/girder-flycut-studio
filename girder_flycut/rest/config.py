@@ -14,12 +14,12 @@ from girder.models.item import Item
 from girder.utility import JsonEncoder
 
 from .. import settings as studio_settings
-from ..artifacts import CONFIG_FIELD, CONFIG_QUERY, configuration, save_config_file
+from ..artifacts import CONFIG_QUERY, save_config_file
 from ..import_storage import load_input
 from ..materials import foil_materials, resolve_material
 from ..models import FlycutConfig
 from ..registration import is_test_run
-from ..schema import pack, unpack
+from ..schema import pack, stack_id, unpack
 from ..storage import draft_root, promote, remove_config
 from ..validation import builder_warnings, normalize_builder_config
 from .catalog import CATALOG
@@ -53,8 +53,7 @@ class ConfigRoutes:
         return [
             item
             for item in Item().find({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}})
-            if str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip().upper()
-            == stack.strip().upper()
+            if FlycutConfig().stackId(item) == str(stack).strip().upper()
         ]
 
     @access.user
@@ -64,7 +63,7 @@ class ConfigRoutes:
         scope = FlycutConfig().workspaceScope()
         result = {}
         for item in Item().find(scope.query({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}})):
-            stack = str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip().upper()
+            stack = FlycutConfig().stackId(item)
             status = FlycutConfig().lifecycle(item)
             if (
                 not FlycutConfig().inWorkspace(item, scope) or not scope.hasAccess(item, user, AccessType.WRITE)
@@ -110,10 +109,7 @@ class ConfigRoutes:
     @autoDescribeRoute(Description("Lowest unused five-character Crockford stack ID."))
     @gated
     def next_stack_id(self):
-        used = {
-            str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip().upper()
-            for item in Item().find(CONFIG_QUERY)
-        }
+        used = {FlycutConfig().stackId(item) for item in Item().find(CONFIG_QUERY)}
         alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
         for number in range(len(used) + 1):
             value = number
@@ -132,7 +128,7 @@ class ConfigRoutes:
         records = Item().find(scope.query({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}}))
         return sorted(
             {
-                str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip()
+                FlycutConfig().stackId(item)
                 for item in records
                 if scope.contains(item) and scope.hasAccess(item, user, AccessType.READ)
             }
@@ -175,7 +171,7 @@ class ConfigRoutes:
                     )["id"]
                 catalog = self.catalog_for(config, user)
                 warnings = builder_warnings(config, catalog)
-                if str(config.get("run_params", {}).get("stackid", "")).strip() in self.submitted_stack_ids(user):
+                if stack_id(config) in self.submitted_stack_ids(user):
                     warnings.append("This Stack ID already has a submitted configuration.")
                 config = normalize_builder_config(config, user, catalog)
                 if warnings and not validated:
@@ -220,16 +216,7 @@ class ConfigRoutes:
                 state["overwriteSafe"] = False
                 target = matches[0]
                 promote(target, self.workspace(user, True), stack, user)
-                Item().collection.update_one(
-                    {"_id": target["_id"]},
-                    {
-                        "$set": {"name": name, "meta.flycut": state, CONFIG_FIELD: rendered_config},
-                        # `meta.flycut` is replaced wholesale just above, which
-                        # already drops the legacy `meta.flycut.config`; naming
-                        # both a parent and its child in one update conflicts.
-                        "$unset": {"meta.config": ""},
-                    },
-                )
+                FlycutConfig().replace(target, name, state, rendered_config)
                 for duplicate in matches[1:]:
                     remove_config(duplicate, workspace_id)
                 if existing and existing["_id"] != target["_id"]:
@@ -240,16 +227,9 @@ class ConfigRoutes:
         if existing:
             if submit:
                 promote(existing, self.workspace(user, True), stack, user)
-            result = Item().collection.update_one(
-                {"_id": existing["_id"], "meta.flycut.status": "draft"},
-                {
-                    "$set": {"name": name, "meta.flycut": state, CONFIG_FIELD: rendered_config},
-                    "$unset": {"meta.config": ""},
-                },
-            )
-            if not result.modified_count and not result.matched_count:
+            item = FlycutConfig().replace(existing, name, state, rendered_config, expect="draft")
+            if item is None:
                 raise RestException("This draft was already submitted.", code=409)
-            item = Item().load(existing["_id"], force=True)
         else:
             workspace = self.workspace(user, True)
             parent = workspace if submit else draft_root(workspace, user)
@@ -265,6 +245,9 @@ class ConfigRoutes:
             item = FlycutConfig().createItem(name, creator=user, folder=folder)
             item = FlycutConfig().setMetadata(item, {"flycut": state, "config": copy.deepcopy(rendered_config)})
             if submit and item["name"] != name:
+                # Direct, because `Item.validate` is what changed the name in the
+                # first place: `createItem` appends `(n)` on a collision, and a
+                # submitted configuration's name has to be exactly its stack's.
                 Item().collection.update_one({"_id": item["_id"]}, {"$set": {"name": name}})
                 item["name"] = name
         return FlycutConfig().filter(save_config_file(item, user, rendered_config), user)
@@ -284,16 +267,11 @@ class ConfigRoutes:
     @gated
     def delete_draft(self, item, user):
         # Claim only a draft, so a concurrent submission cannot be deleted.
-        result = Item().collection.update_one(
-            {"_id": item["_id"], "meta.flycut.status": "draft"}, {"$set": {"meta.flycut.status": "deleting"}}
-        )
-        if not result.modified_count:
+        if not FlycutConfig().claimStatus(item, expect="draft", become="deleting"):
             raise RestException("Only editable drafts can be deleted.", code=409)
         try:
             remove_config(item, studio_settings.policy()["workspace_folder_id"])
         except Exception:
-            Item().collection.update_one(
-                {"_id": item["_id"], "meta.flycut.status": "deleting"}, {"$set": {"meta.flycut.status": "draft"}}
-            )
+            FlycutConfig().claimStatus(item, expect="deleting", become="draft")
             raise
         return {"deleted": str(item["_id"])}

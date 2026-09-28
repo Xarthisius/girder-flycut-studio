@@ -45,9 +45,9 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 `phase-6c-metadata` (`F3`).
 
 **`docs/BACKEND_REVIEW.md` is the working document for what is left on the Python side** —
-seven items, each measured. Items 1 (the only correctness one) and 2 landed on
-`redis-stack-lock` and `perf-listing-n1`; five are left, none a bug. It is disposable;
-delete it when the last one lands.
+seven items, each measured. Items 1 (the only correctness one), 2, 3 and 5 landed on
+`redis-stack-lock`, `perf-listing-n1` and `model-owns-its-writes`; three are left, none a
+bug. It is disposable; delete it when the last one lands.
 
 ### Where things stand
 
@@ -67,7 +67,7 @@ What Phase 6 changed, in case it is not obvious from the tree:
 - **A view reached by a route renders itself.** Girder's `g:navigateTo` constructs a view
   and sets its `el` but never calls `render()`.
 
-`pytest tests` is 86 tests at 89% coverage; `node test/browser/verify.cjs` is 89 checks
+`pytest tests` is 101 tests at 89% coverage; `node test/browser/verify.cjs` is 89 checks
 and is the only thing that renders the UI.
 
 The conventions the client settled on, which anything added to it should follow:
@@ -180,8 +180,9 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 girder_flycut/
   __init__.py            FlycutPlugin.load() — registers the models, the dashboard and
                          the REST resource
-  models/                FlycutConfig, an Item subclass, registered with ModelImporter,
-                         and WorkspaceScope, the containment rule resolved once
+  models/                FlycutConfig, an Item subclass, registered with ModelImporter --
+                         it owns the lifecycle writes (setState, claimBusy, claimStatus,
+                         replace) -- and WorkspaceScope, the containment rule resolved once
   rest/                  17 routes under /api/v1/flycut, as four mixins over GateMixin —
                          settings, template, config, lifecycle — plus gate, locking, catalog
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
@@ -232,6 +233,16 @@ anything touching the UI.
 
 ## Traps
 
+- **`Item.validate` renames on a sibling collision.** It appends ` (n)` whenever the
+  name being saved differs from the one stored, so a model `save()` cannot be used for
+  any write that changes a configuration's name — the name is derived from its stack ID
+  and a silent rename breaks the client. That is why both replacement paths and the
+  `createItem` name fix are still direct `$set`s while the lifecycle writes are not.
+  `FlycutConfig.setState()` never touches `name`, which is what keeps it safe.
+- **A model write must read the document back first.** A handler holds the document it
+  loaded before the work it is recording — `generate` uploads files and `claimBusy` flips
+  `busy` in between — so saving that copy undoes both. `setState()` reloads; anything
+  else writing a configuration should too.
 - **Anything that iterates configurations must resolve the workspace scope once.**
   `FlycutConfig.inWorkspace()` is the containment rule *and*, through the folder it
   resolves, the item ACL — so calling it per item is an N+1 that nothing fails on. The

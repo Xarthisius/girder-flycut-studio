@@ -12,8 +12,8 @@ the code. Line numbers drift, so each item names an anchor instead.
 |---|---|
 | **Python** | 2,628 lines across 27 modules |
 | **Tests** | 68 pytest at 88%, five Node suites, an 89-check browser harness |
-| **Done** | the correctness risks and the measured cost — PR #21, #22, and items 1 and 2 below |
-| **Left** | five. None is a bug; each is clarity or dead weight |
+| **Done** | the correctness risks, the measured cost, and the model's writes — PR #21, #22, items 1–3 and 5 |
+| **Left** | three. None is a bug; each is clarity or dead weight |
 
 ---
 
@@ -188,7 +188,34 @@ N; the three endpoints' totals flat as configurations are added.
 
 ---
 
-## 3. Eight of the fifteen direct Mongo writes no longer need to be
+## 3. Eight of the fifteen direct Mongo writes no longer need to be  *(done — `model-owns-its-writes`)*
+
+**Landed, and the count came out differently than estimated.** Five writes now go
+through `FlycutConfig.setState()` and therefore through `save()` and `validate()` —
+the whole lifecycle: generate, its `busy` release, delete-files, register, its `busy`
+release. Three more moved into the model *as* direct writes, behind names that say
+what they are: `claimBusy()`, `claimStatus()` and `replace()`. Five stay where they
+are, each now carrying its one-line reason. Fifteen scattered writes became eight,
+and none of the eight is a shortcut.
+
+**Two writes were expected to convert and could not**, for a reason the review did
+not have: `Item.validate` appends `(n)` to a name that collides with a sibling,
+whenever the name being saved differs from the one stored. A configuration's name is
+derived from its stack ID, so a silent rename is not acceptable — which rules out a
+model save for both replacement paths and for the `createItem` name fix. `setState`
+is unaffected because it never changes `name`; that is asserted.
+
+**`setState` reloads before it writes**, which the review did not anticipate either.
+A caller holds the document it loaded before the work it is recording — `generate`
+uploads files and `claimBusy` flips `busy` in between — so saving that copy back
+would undo both. There is a test for exactly that.
+
+The losslessness this item rests on is now pinned rather than spot-checked:
+`tests/test_model_writes.py` takes a fully registered configuration, saves it through
+the model, and asserts the snapshot, all four timestamps, the registration receipt
+and the whole of `meta` come back unchanged.
+
+The record below is why, kept until this document goes.
 
 This was the part of the review with the strongest justification, and **PR #22
 removed most of that justification**. Current state:
@@ -256,7 +283,15 @@ three persistence paths — overwrite an existing stack, update a draft, create 
 
 ---
 
-## 5. Duplication worth a name
+## 5. Duplication worth a name  *(done — `model-owns-its-writes`)*
+
+**Landed**, as this item predicted, out of the same work. `schema.stack_id(config)`
+is the one definition and `FlycutConfig.stackId(item)` reads it off an item; the
+seven hand-written copies across four modules are gone, including the one in
+`save_config` that compared against `submitted_stack_ids` without upper-casing while
+everything else did. The policy read was item 2. `LifecycleRoutes.rendered()` is the
+load-and-filter helper. `FlycutConfig()` is still constructed everywhere; it is a
+singleton and nothing measured says it costs anything.
 
 | expression | occurrences | belongs |
 |---|---|---|
@@ -324,7 +359,7 @@ One per item, in this order. The first two are worth doing; the rest are tidying
 |---|---|---|
 | ~~`redis-stack-lock`~~ | ~~1~~ | **done** — the only correctness item, and it deleted a model |
 | ~~`perf-listing-n1`~~ | ~~2~~ | **done** — the largest cost a user can feel |
-| `model-owns-its-writes` | 3 + 5 | the stack-ID helper falls out of the same work |
+| ~~`model-owns-its-writes`~~ | ~~3 + 5~~ | **done** — the stack-ID helper fell out of the same work |
 | `split-save-config` | 4 | easier once the model owns the writes |
 | `drop-dead-lifecycle-state` | 6 | just `action` now; see the note there |
 | `tidy-validators` | 7 | independent, can go any time |
@@ -337,10 +372,11 @@ provisions one for girder-jsonforms' load-time lock, so nothing there changes.
 1. ~~**Does the stack lock fail closed during a Redis outage?**~~ **Answered: yes.**
    A Redis outage now refuses the request rather than running unserialized. This is
    the behaviour change item 1 shipped: before, an outage did not stop a generation.
-2. ~~**How far does item 3 go?**~~ **Answered: all eight.** Every convertible write
-   becomes a model method, cleanup paths included — each is already inside
-   `@stack_locked`, which is what makes a whole-document save safe there. Confirm
-   that per site while converting, as item 3 says.
+2. ~~**How far does item 3 go?**~~ **Answered: all eight, and it landed as five.**
+   Every write that *could* become a model save did, cleanup paths included. Two
+   could not, for a reason found while converting rather than decided: `Item.validate`
+   renames on a sibling collision whenever the name changes, and a configuration's
+   name is its stack's. See item 3.
 
 *(The earlier question — whether `lock()` survives — is answered in item 6. It
 does.)*

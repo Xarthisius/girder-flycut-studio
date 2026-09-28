@@ -59,7 +59,9 @@ def load_input(config, user, write=False):
 
 def link_input(item, identifiers):
     if item:
-        # Normalize legacy strings and append atomically across simultaneous stacks.
+        # An aggregation pipeline update, not a read-modify-write: it normalizes a
+        # legacy string in place and appends atomically, so two stacks registering
+        # against one input file at the same time both survive.
         existing = {
             "$cond": [
                 {"$isArray": "$meta.igsn"},

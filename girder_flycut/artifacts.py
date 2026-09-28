@@ -60,6 +60,10 @@ def annotate(item, identifiers, extra=None):
     snapshots = copy.deepcopy(extra or {})
     item = Item().save(item)
     if snapshots:
+        # Restored after the save, not through it: girder-jsonforms rewrites
+        # ISO-8601 strings under `meta` into dates, and this payload mirrors an
+        # artifact file that has to match it byte for byte. Same invariant as
+        # `register_metadata`.
         Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta." + k: v for k, v in snapshots.items()}})
     return Item().load(item["_id"], force=True)
 

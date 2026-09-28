@@ -39,12 +39,17 @@ from .locking import stack_locked
 class LifecycleRoutes:
     """Moving a configuration between submitted, generated and registered."""
 
+    def rendered(self, item, user):
+        """The configuration as the client should now see it, read back fresh.
+
+        Every transition here returns this: the handler holds the document it
+        started from, and what it wrote went through the model, so the answer
+        has to come from storage rather than from the copy in hand.
+        """
+        return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)
+
     def lock(self, item, action):
-        result = Item().collection.update_one(
-            {"_id": item["_id"], "meta.flycut.busy": {"$ne": True}},
-            {"$set": {"meta.flycut.busy": True, "meta.flycut.action": action}},
-        )
-        if not result.modified_count:
+        if not FlycutConfig().claimBusy(item, action):
             raise RestException("This configuration is already being processed.", code=409)
 
     @access.user
@@ -66,7 +71,7 @@ class LifecycleRoutes:
             raise RestException("Submit the draft before generating files.")
         if FlycutConfig().lifecycle(item) in {"generated", "registered"}:
             return FlycutConfig().filter(item, user)
-        stack = unpack(configuration(item))["run_params"]["stackid"]
+        stack = FlycutConfig().stackId(item)
         if any(
             other["_id"] != item["_id"] and FlycutConfig().lifecycle(other) in {"generated", "registered"}
             for other in self.stack_matches(stack)
@@ -102,17 +107,13 @@ class LifecycleRoutes:
                 extra = {"metadata": json.loads(data)} if name.endswith("-metadata.json") else {}
                 annotate(output_item, association(configuration(item)), extra)
                 files.append({"_id": str(file["_id"]), "itemId": str(file["itemId"]), "name": name})
-            Item().collection.update_one(
-                {"_id": item["_id"]},
-                {
-                    "$set": {
-                        "meta.flycut.outputSchemaVersion": 3,
-                        "meta.flycut.files": files,
-                        "meta.flycut.folderId": str(folder["_id"]),
-                        "meta.flycut.status": "generated",
-                        "meta.flycut.generatedAt": generated_at,
-                    }
-                },
+            FlycutConfig().setState(
+                item,
+                outputSchemaVersion=3,
+                files=files,
+                folderId=str(folder["_id"]),
+                status="generated",
+                generatedAt=generated_at,
             )
         except Exception as exc:
             for artifact in files:
@@ -123,8 +124,8 @@ class LifecycleRoutes:
                 raise RestException(str(exc)) from exc
             raise
         finally:
-            Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta.flycut.busy": False}})
-        return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)
+            FlycutConfig().setState(item, busy=False)
+        return self.rendered(item, user)
 
     @access.user
     @autoDescribeRoute(
@@ -151,14 +152,13 @@ class LifecycleRoutes:
                     artifact_item = Item().load(file["itemId"], force=True)
                     if artifact_item and artifact_item["_id"] != item["_id"]:
                         Item().remove(artifact_item)
-        Item().collection.update_one(
-            {"_id": item["_id"]},
-            {
-                "$set": {"meta.flycut.status": "submitted", "meta.flycut.overwriteSafe": False},
-                "$unset": {"meta.flycut.files": "", "meta.flycut.folderId": "", "meta.flycut.generatedAt": ""},
-            },
+        FlycutConfig().setState(
+            item,
+            status="submitted",
+            overwriteSafe=False,
+            unset=("files", "folderId", "generatedAt"),
         )
-        return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)
+        return self.rendered(item, user)
 
     @access.user
     @autoDescribeRoute(
@@ -212,6 +212,8 @@ class LifecycleRoutes:
             if not child:
                 # Reserve this parent/suffix across workers before contacting the registry.
                 # The durable reservation intentionally survives uncertain registry failures.
+                # A direct insert, because the duplicate key *is* the check: two
+                # requests racing for one child IGSN must not both reserve it.
                 reservations = Item().collection.database["flycut_registration"]
                 try:
                     reservations.insert_one({"_id": child_igsn, "configId": config_id})
@@ -251,6 +253,8 @@ class LifecycleRoutes:
             metadata = association(configuration(item))
             link_input(input_item, metadata)
             if input_item:
+                # `$addToSet` on a deposition, not a configuration: several stacks
+                # can name one input file at once, and each must survive.
                 model.collection.update_one(
                     {"_id": child["_id"]}, {"$addToSet": {"flycutInputs": str(input_item["_id"])}}
                 )
@@ -289,18 +293,14 @@ class LifecycleRoutes:
             files = state["files"] + [
                 {"_id": str(receipt_file["_id"]), "itemId": str(receipt_file["itemId"]), "name": receipt_file["name"]}
             ]
-            Item().collection.update_one(
-                {"_id": item["_id"]},
-                {
-                    "$set": {
-                        **{"meta." + key: value for key, value in metadata.items()},
-                        "meta.flycut.registration": receipt,
-                        "meta.flycut.files": files,
-                        "meta.flycut.status": "registered",
-                        "meta.flycut.registeredAt": registered_at,
-                    }
-                },
+            FlycutConfig().setState(
+                item,
+                metadata=metadata,
+                registration=receipt,
+                files=files,
+                status="registered",
+                registeredAt=registered_at,
             )
         finally:
-            Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta.flycut.busy": False}})
-        return FlycutConfig().filter(FlycutConfig().load(item["_id"], user=user), user)
+            FlycutConfig().setState(item, busy=False)
+        return self.rendered(item, user)
