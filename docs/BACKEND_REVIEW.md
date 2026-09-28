@@ -12,8 +12,8 @@ the code. Line numbers drift, so each item names an anchor instead.
 |---|---|
 | **Python** | 2,628 lines across 27 modules |
 | **Tests** | 68 pytest at 88%, five Node suites, an 89-check browser harness |
-| **Done** | the issues that were correctness risks — see PR #21, #22, and item 1 below |
-| **Left** | six. None is a bug; each is cost, clarity, or dead weight |
+| **Done** | the correctness risks and the measured cost — PR #21, #22, and items 1 and 2 below |
+| **Left** | five. None is a bug; each is clarity or dead weight |
 
 ---
 
@@ -116,7 +116,36 @@ probes above are regression tests.
 
 ---
 
-## 2. The listing endpoints are N+1  *(largest measured cost)*
+## 2. The listing endpoints are N+1  *(done — `perf-listing-n1`)*
+
+**Landed.** All three endpoints are now **four queries flat** — two
+`Dashboard.findOne` (the gate's and one policy read), one `Folder.find` resolving
+the scope, one `Item.find` — against `N+2`/`3N` and `N+1`/`2N` before. At the
+endpoints' own 100-configuration limit that is 12 round trips per dashboard open
+rather than roughly a thousand.
+
+The rule moved into a `WorkspaceScope`: one query resolves the workspace, its
+children and the folders under any Drafts root, and membership is tested against
+that. The third `N` was not containment at all but `Item().hasAccess`, which loads
+the item's folder and defers to `Folder.hasAccess` — the scope already holds every
+such folder, so `scope.hasAccess` is that same call without the load.
+
+`inWorkspace` was pinned first, as this item asked: nine tests in
+`tests/test_models.py` cover all three in-workspace layouts (loose, stack folder,
+draft under Drafts) and six ways out, and two more assert `scope.hasAccess` never
+disagrees with `Item().hasAccess`. `tests/test_listing_cost.py` is the exit
+criterion itself — it counts queries at two workspace sizes and fails if either
+endpoint's cost grows. It failed on the numbers below before any of this, which is
+how they were confirmed.
+
+Two things were deliberately **not** scoped. `stack_matches` and `next_stack_id`
+still search the whole instance: the first is what reports a collision outside
+this workspace as someone else's stack rather than silently overwriting it, and
+the second would otherwise hand out an ID already spent elsewhere. `stack_states`
+with no workspace configured also still walks everything, because that is what it
+did before and what the client's reuse guard depends on.
+
+The record below is why, kept until this document goes.
 
 **Measured**, by counting model calls per request:
 
@@ -232,7 +261,7 @@ three persistence paths — overwrite an existing stack, update a draft, create 
 | expression | occurrences | belongs |
 |---|---|---|
 | `unpack(configuration(item))…["stackid"]…strip().upper()` | 7 | `FlycutConfig.stackId(item)` |
-| `policy()["workspace_folder_id"]` | 9 | resolved once per request — see item 2 |
+| ~~`policy()["workspace_folder_id"]` | 9~~ | **done in item 2** — four left, none in a loop |
 | `FlycutConfig().filter(FlycutConfig().load(id, user=user), user)` | 3 | one helper on the mixin |
 | `FlycutConfig()` constructed | 24 | it is a singleton, but reads as a cost |
 
@@ -294,7 +323,7 @@ One per item, in this order. The first two are worth doing; the rest are tidying
 | branch | item | why this order |
 |---|---|---|
 | ~~`redis-stack-lock`~~ | ~~1~~ | **done** — the only correctness item, and it deleted a model |
-| `perf-listing-n1` | 2 | the largest cost a user can feel |
+| ~~`perf-listing-n1`~~ | ~~2~~ | **done** — the largest cost a user can feel |
 | `model-owns-its-writes` | 3 + 5 | the stack-ID helper falls out of the same work |
 | `split-save-config` | 4 | easier once the model owns the writes |
 | `drop-dead-lifecycle-state` | 6 | just `action` now; see the note there |
