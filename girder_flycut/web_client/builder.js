@@ -10,12 +10,16 @@
  */
 import { assessConfiguration } from './core/assess.js';
 import {
-    makeLaser as buildLaser, restoreImportedLaser, LASER_LIMIT,
+    catalogOptions, materialSummary, templateSummary, resolveMaterial
+} from './core/catalog.js';
+import { customFieldRows, importedLasers, layerAssignment, toFormShape } from './core/config.js';
+import {
+    makeLaser as buildLaser, restoreImportedLaser, LASER_LIMIT, acceptColor,
     normalizeLayerNames as renameByPosition, moveLaser as reorderLasers,
-    applyMaterialDefaults as applyDefaults, usedLaserCount as countUsed,
-    resolveLaserForLayer as resolveLayer
+    applyMaterialDefaults as applyDefaults, laserListState
 } from './core/laser.js';
-import { exportDecision } from './core/validate.js';
+import { previewLayout } from './core/preview.js';
+import { exportDecision, statusLabel } from './core/validate.js';
 import { escapeHtml } from './util.js';
 
 export default async function createBuilder({ mount, currentUser, fetch }) {
@@ -61,12 +65,8 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     }
 
     function fillSelect(selector, entries, placeholder) {
-        const select = $(selector);
-        select.innerHTML = `<option value="">${placeholder}</option>` + entries.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}${Number.isInteger(item.layer_count) ? ` · ${item.layer_count} layers` : ''}</option>`).join('');
+        $(selector).innerHTML = catalogOptions(entries, placeholder, escapeHtml);
     }
-
-    const usedLaserCount = (layerCount) =>
-        countUsed(state.laserParams, layerCount, Number($('#repeatX').value));
 
     function renderAutocomplete() {
         $('#operatorNames').innerHTML = state.knownOperators.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
@@ -81,12 +81,10 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     }
 
     function renderLasers() {
-        const list = $('#laserList');
         const layerCount = state.templateDetail?.layers?.length ?? null;
-        const usedCount = usedLaserCount(layerCount);
-        list.innerHTML = state.laserParams.map((laser, index) => {
-            const overflow = usedCount !== null && index >= usedCount;
-            const unused = overflow || laser.enabled === false;
+        const list = laserListState(state.laserParams, layerCount, Number($('#repeatX').value));
+        $('#laserList').innerHTML = state.laserParams.map((laser, index) => {
+            const { overflow, unused } = list.cards[index];
             return `
         <article class="laser-card ${unused ? 'unused' : ''} ${laser.locked ? 'import-locked' : ''}" data-id="${laser.id}">
           <div class="laser-head"><span class="drag-handle" draggable="true" aria-label="Drag ${laser.name} to reorder" title="Drag to reorder">⠿</span><i class="color-swatch" style="--swatch:${laser.color}"></i><span class="laser-name">Layer ${laser.name}</span>${laser.isDefault ? '<span class="default-badge">Default</span>' : ''}${laser.fromImport ? `<span class="source-badge ${laser.locked ? '' : 'edited'}">${laser.locked ? 'From Import' : 'Edited from Import'}</span>` : ''}${unused ? '<span class="unused-badge">Unused</span>' : ''}${laser.fromImport ? `<button class="lock-btn toggle-lock" type="button" aria-label="${laser.locked ? 'Unlock' : 'Restore'} imported parameters">${laser.locked ? 'Unlock' : 'Restore'}</button>` : ''}<button class="remove-btn remove-laser" type="button" aria-label="Remove laser setting">×</button></div>
@@ -102,11 +100,11 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
           </div>
         </article>`;
         }).join('');
-        $('#laserCount').textContent = `${state.laserParams.length} / ${layerCount ?? '—'}`;
-        $('#addLaserBtn').disabled = state.laserParams.length >= LASER_LIMIT;
-        $('#addLaserBtn').classList.toggle('surplus', layerCount !== null && state.laserParams.length >= layerCount);
-        $('#addLaserBtn').title = layerCount !== null && state.laserParams.length >= layerCount ? 'Additional settings will be unused by this template' : 'Add the next layer setting';
-        $('#laserError').textContent = state.laserParams.length ? '' : 'At least one laser setting is required.';
+        $('#laserCount').textContent = list.count;
+        $('#addLaserBtn').disabled = list.addDisabled;
+        $('#addLaserBtn').classList.toggle('surplus', list.surplus);
+        $('#addLaserBtn').title = list.addTitle;
+        $('#laserError').textContent = list.error;
     }
 
     function presetFieldNames() { return Object.keys(state.presets.find((entry) => entry.id === state.preset)?.custom_fields || {}); }
@@ -188,7 +186,9 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
         const result = configurationStatus();
         if (acknowledgedSnapshot !== validationSnapshot()) clearValidation();
         $('#validationAck').disabled = !result.complete || Boolean($('#configFields')?.disabled);
-        const statusText = state.viewStatus || (result.complete && result.warnings.length && $('#validationAck').checked ? 'Validated' : result.status);
+        const statusText = statusLabel({
+            viewStatus: state.viewStatus, status: result, acknowledged: $('#validationAck').checked
+        });
         $('#validationAckLabel').classList.toggle('hidden', statusText !== 'Needs validation');
         $('#saveState').innerHTML = `<span></span> ${statusText}`;
         $('#saveState').dataset.status = statusText.toLowerCase().replaceAll(' ', '-');
@@ -225,7 +225,7 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     async function changeTemplate() {
         const id = $('#template').value;
         const entry = state.templates.find((item) => item.id === id);
-        $('#templateMeta').textContent = entry ? `${entry.layer_count} unique layers · ${entry.flyer_count} physical flyers` : '';
+        $('#templateMeta').textContent = templateSummary(entry);
         state.templateDetail = null;
         if (id) {
             const response = await fetch(`/api/templates/${encodeURIComponent(id)}`);
@@ -235,28 +235,28 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
         updateAll();
     }
 
-    const resolveLaserForLayer = (layerIndex) => resolveLayer(state.laserParams, layerIndex, {
-        repeat: Number($('#repeatX').value), wraparound: $('#allowWraparound').checked
-    });
-
     function updateAssignmentUI() {
         renderLasers(); updateAll();
     }
 
     function drawPreview() {
-        const canvas = $('#canvas'); const flyers = state.templateDetail?.flyers || [];
-        const templateLayers = state.templateDetail?.layers || [];
+        const canvas = $('#canvas');
+        const detail = state.templateDetail;
         const material = state.materials.find((item) => item.id === $('#foilMaterial').value);
         const materialStyle = material?.color ? `--material:${escapeHtml(material.color)};` : '';
-        $('#flyerTotal').textContent = `${templateLayers.length} layers · ${flyers.length} flyers`;
-        $('#previewTitle').textContent = state.templateDetail?.label || state.templateDetail?.id || 'Select a template';
+        $('#flyerTotal').textContent = `${(detail?.layers || []).length} layers · ${(detail?.flyers || []).length} flyers`;
+        $('#previewTitle').textContent = detail?.label || detail?.id || 'Select a template';
         canvas.style.transform = `scale(${state.zoom})`;
         $('#zoomLabel').textContent = `${Math.round(state.zoom * 100)}%`;
+        const { size, flyers } = previewLayout({
+            flyers: detail?.flyers || [],
+            layers: detail?.layers || [],
+            lasers: state.laserParams,
+            repeat: Number($('#repeatX').value),
+            wraparound: $('#allowWraparound').checked
+        });
         if (!flyers.length) { canvas.innerHTML = '<div class="empty-preview">Choose a template to see its flyer layout.</div>'; return; }
-        const xs = flyers.map((f) => Number(f.xpos)), ys = flyers.map((f) => Number(f.ypos));
-        const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-        const spanX = Math.max(maxX - minX, 1), spanY = Math.max(maxY - minY, 1); const size = Math.max(18, Math.min(42, 210 / Math.sqrt(flyers.length)));
-        canvas.innerHTML = flyers.map((flyer) => { const layerIndex = templateLayers.indexOf(String(flyer.layer)); const { laser, augmented } = resolveLaserForLayer(layerIndex); const color = laser?.color || '#909995'; const left = 8 + ((Number(flyer.xpos) - minX) / spanX) * 84; const top = 8 + ((maxY - Number(flyer.ypos)) / spanY) * 84; const mapping = laser ? `Template ${flyer.layer} uses ${laser.name}${augmented ? ' (augmented)' : ''}` : `Template ${flyer.layer} is unchanged`; return `<div class="flyer ${laser ? '' : 'unconfigured'}" title="${escapeHtml(flyer.position)} · ${escapeHtml(mapping)}" style="--layer:${color};${materialStyle}left:calc(${left}% - ${size / 2}px);top:calc(${top}% - ${size / 2}px);width:${size}px;height:${size}px">${laser ? escapeHtml(laser.name) + (augmented ? '*' : '') : escapeHtml(flyer.layer)}</div>`; }).join('');
+        canvas.innerHTML = flyers.map((flyer) => `<div class="flyer ${flyer.unconfigured ? 'unconfigured' : ''}" title="${escapeHtml(flyer.position)} · ${escapeHtml(flyer.title)}" style="--layer:${flyer.color};${materialStyle}left:calc(${flyer.left}% - ${size / 2}px);top:calc(${flyer.top}% - ${size / 2}px);width:${size}px;height:${size}px">${escapeHtml(flyer.label)}</div>`).join('');
     }
 
     async function importExcel(file) {
@@ -282,30 +282,19 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     async function importJson(file, savedSnapshot = false) {
         if (!file) return;
         try {
-            let cfg = JSON.parse(await file.text());
-            if (cfg.run_parameters) {
-                cfg = {
-                    preset: cfg.preset,
-                    run_params: cfg.run_parameters,
-                    laser_assignment: cfg.laser_parameters,
-                    parameter_import_file: cfg.laser_parameters?.import_file,
-                    laser_params: cfg.laser_parameters?.flyers,
-                    custom_fields: cfg.custom_fields
-                };
-            }
+            const cfg = toFormShape(JSON.parse(await file.text()));
             state.preset = null;
             $('#stackid').value = cfg.run_params?.stackid ?? '';
             $('#operator').value = cfg.run_params?.operator ?? '';
-            $('#foilMaterial').value = state.materials.find((material) => material.id === cfg.run_params?.foil_material || material.legacyId === cfg.run_params?.foil_material)?.id ?? cfg.run_params?.foil_material ?? '';
+            $('#foilMaterial').value = resolveMaterial(state.materials, cfg.run_params?.foil_material);
             $('#template').value = cfg.run_params?.template ?? '';
-            const assignment = cfg.laser_assignment || {};
-            $('#repeatX').value = assignment.repeat ?? (assignment.style === 'repeat' ? assignment.x || 1 : 1);
-            $('#allowWraparound').checked = assignment.wraparound ?? assignment.style !== 'exact';
+            const assignment = layerAssignment(cfg.laser_assignment);
+            $('#repeatX').value = assignment.repeat;
+            $('#allowWraparound').checked = assignment.wraparound;
             state.parameterImportFile = savedSnapshot ? cfg.parameter_import_file ?? null : file.name;
             state.laserParams = [];
-            (Array.isArray(cfg.laser_params) ? cfg.laser_params : []).slice(0, 28).forEach((values) => state.laserParams.push(makeLaser({ ...values, fromImport: savedSnapshot ? Boolean(values.from_import) : true, locked: savedSnapshot ? Boolean(values.from_import) : true })));
-            if (!state.laserParams.length && !savedSnapshot) state.laserParams.push(makeLaser({ isDefault: true }));
-            state.customFields = (cfg.custom_field_rows || Object.entries(cfg.custom_fields || {}).map(([name, value]) => ({ name, value }))).map(({ name, value }) => ({ id: crypto.randomUUID(), name, value: String(value ?? '') }));
+            importedLasers(cfg, savedSnapshot).forEach((values) => state.laserParams.push(makeLaser(values)));
+            state.customFields = customFieldRows(cfg).map(({ name, value }) => ({ id: crypto.randomUUID(), name, value: String(value ?? '') }));
             await changeTemplate(); updateAssignmentUI(); renderCustomFields(); updateAll();
             toast(`Imported ${file.name}`);
         } catch (error) { toast(`JSON import failed: ${error.message}`); } finally { $('#jsonFile').value = ''; }
@@ -320,7 +309,7 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     $('#laserList').addEventListener('dragleave', (event) => { const card = event.target.closest('.laser-card'); if (card && !card.contains(event.relatedTarget)) card.classList.remove('drag-over'); });
     $('#laserList').addEventListener('drop', (event) => { const card = event.target.closest('.laser-card'); if (!card) return; event.preventDefault(); const bounds = card.getBoundingClientRect(); moveLaser(draggedLaserId, card.dataset.id, event.clientY > bounds.top + bounds.height / 2); draggedLaserId = null; });
     $('#laserList').addEventListener('dragend', () => { draggedLaserId = null; $$('.laser-card.dragging,.laser-card.drag-over').forEach((card) => card.classList.remove('dragging', 'drag-over')); });
-    $('#foilMaterial').addEventListener('change', () => { const material = state.materials.find((item) => item.id === $('#foilMaterial').value); $('#materialMeta').textContent = material ? [material.name, material.thickness_um && `${material.thickness_um} µm`, material.igsn].filter(Boolean).join(' · ') : 'Foil IGSNs from Girder'; applyMaterialDefaults(material); renderLasers(); updateAll(); });
+    $('#foilMaterial').addEventListener('change', () => { const material = state.materials.find((item) => item.id === $('#foilMaterial').value); $('#materialMeta').textContent = materialSummary(material); applyMaterialDefaults(material); renderLasers(); updateAll(); });
     $('#template').addEventListener('change', changeTemplate);
     $('#allowWraparound').addEventListener('change', updateAssignmentUI);
     $('#repeatX').addEventListener('input', updateAssignmentUI);
@@ -397,14 +386,11 @@ export default async function createBuilder({ mount, currentUser, fetch }) {
     }
 
     function commitHexColor(input) {
-        const laser = state.laserParams.find((item) => item.id === input.closest('.laser-card').dataset.id);
-        const value = input.value.trim();
-        if (!/^#[0-9a-f]{6}$/i.test(value) || state.laserParams.some((item) => item.id !== laser.id && item.color.toLowerCase() === value.toLowerCase())) {
-            input.value = laser.color;
-            toast('Use a unique six-digit hex color, such as #3C8D40.');
-            return;
-        }
-        laser.color = value.toUpperCase();
+        const id = input.closest('.laser-card').dataset.id;
+        const decision = acceptColor(state.laserParams, id, input.value);
+        input.value = decision.color;
+        if (!decision.ok) { toast(decision.message); return; }
+        state.laserParams.find((item) => item.id === id).color = decision.color;
         renderLasers(); updateAll();
     }
     $('#laserList').addEventListener('change', (event) => {

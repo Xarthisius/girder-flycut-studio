@@ -22,3 +22,24 @@ export function exportDecision(status, acknowledged) {
     }
     return { ok: true, message: null, focus: null };
 }
+
+/**
+ * The one word the form reports about itself.
+ *
+ * Four states, and the order matters: a read-only configuration says what it
+ * is rather than what it would need, and "Validated" only outranks "Needs
+ * validation" once the box is ticked.
+ *
+ * @param {object} options
+ * @param {?string} options.viewStatus set while viewing a saved configuration
+ * @param {{complete: boolean, warnings: string[], status: string}} options.status
+ * @param {boolean} options.acknowledged
+ */
+export function statusLabel({ viewStatus = null, status, acknowledged = false }) {
+    if (viewStatus) {
+        return viewStatus;
+    }
+    return status.complete && status.warnings.length && acknowledged
+        ? 'Validated'
+        : status.status;
+}
