@@ -8,12 +8,23 @@ from girder.models.file import File
 from girder.models.folder import Folder
 from girder.models.item import Item
 from girder.models.upload import Upload
-from girder.utility import RequestBodyStream
+from girder.utility import JsonEncoder, RequestBodyStream
 
 from .schema import unpack
 
+# The configuration snapshot lives at the top level of the item, deliberately
+# outside `meta`. girder-jsonforms binds `coerce_metadata_dates` to
+# `model.item.save`, which recursively rewrites ISO-8601 strings anywhere under
+# `meta` into datetimes -- and this snapshot is written verbatim into a
+# generated artifact and backs the stack's IGSN, so `json.dumps` has to accept
+# it unchanged. Outside `meta`, no handler touches it.
+CONFIG_FIELD = "flycutConfig"
+
+# The two `meta` forms are pre-migration layouts, kept so that a deployment
+# that has not restarted yet still lists its configurations.
 CONFIG_QUERY = {
     "$or": [
+        {CONFIG_FIELD: {"$exists": True}},
         {"meta.config": {"$exists": True}, "meta.flycut": {"$exists": True}},
         {"meta.flycut.config": {"$exists": True}},
     ]
@@ -21,7 +32,11 @@ CONFIG_QUERY = {
 
 
 def configuration(item):
-    return item.get("meta", {}).get("config", item["meta"]["flycut"].get("config", {}))
+    """The configuration snapshot, wherever this item happens to carry it."""
+    if CONFIG_FIELD in item:
+        return item[CONFIG_FIELD]
+    meta = item.get("meta", {})
+    return meta.get("config", meta.get("flycut", {}).get("config", {}))
 
 
 def replace_bytes(file, data, user):
@@ -51,19 +66,20 @@ def annotate(item, identifiers, extra=None):
 
 def save_config_file(item, user, rendered=None):
     config = copy.deepcopy(configuration(item) if rendered is None else rendered)
-    item["meta"]["config"] = copy.deepcopy(config)
+    item[CONFIG_FIELD] = copy.deepcopy(config)
+    # Clear both pre-migration homes, so an item saved here stops carrying two
+    # copies that can drift apart.
+    item.get("meta", {}).pop("config", None)
     item["meta"]["flycut"].pop("config", None)
     item["meta"].update(association(config))
     item = Item().save(item)
-    # JSONForms coerces dates on save; the config snapshot must retain exact JSON types.
-    Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta.config": config}})
     if item["meta"]["flycut"]["status"] != "draft":
         folder = Folder().load(item["folderId"], force=True)
         for key in ("stackIgsn", "stackigsn", "stackId", "stackDepositionId"):
             folder.setdefault("meta", {}).pop(key, None)
         folder["meta"].update(association(config))
         Folder().save(folder)
-    data = json.dumps(config, indent=2, allow_nan=False).encode()
+    data = json.dumps(config, indent=2, allow_nan=False, cls=JsonEncoder).encode()
     file = File().findOne({"itemId": item["_id"], "mimeType": "application/json"})
     name = item["name"] + ".json"
     if file:
@@ -78,10 +94,17 @@ def save_config_file(item, user, rendered=None):
     return Item().load(item["_id"], force=True)
 
 
-def register_metadata(item, now, user):
+def register_metadata(item, registered_at, user):
+    """Stamp the generated metadata artifact, and return what the file holds.
+
+    The caller stores the return value as the artifact item's metadata, and a
+    test pins the two to be equal -- so the timestamp is normalised to its ISO
+    string here rather than left as a datetime that `JsonEncoder` would render
+    one way into the file and Mongo would store another way beside it.
+    """
     file = File().findOne({"itemId": item["_id"], "name": item["name"]})
     with File().open(file) as stream:
         payload = json.load(stream)
-    payload["time_registered"] = now
-    replace_bytes(file, json.dumps(payload, indent=2, allow_nan=False).encode(), user)
+    payload["time_registered"] = registered_at.isoformat()
+    replace_bytes(file, json.dumps(payload, indent=2, allow_nan=False, cls=JsonEncoder).encode(), user)
     return payload

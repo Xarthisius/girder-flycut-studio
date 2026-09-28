@@ -5,13 +5,15 @@ import json
 import math
 import re
 
+from girder.utility import JsonEncoder
+
 from .schema import unpack
 
 
 def normalize_config(config, user, catalog, submitted=False):
     if not isinstance(config, dict):
         raise ValueError("Configuration must be an object.")
-    if len(json.dumps(config, allow_nan=False).encode()) > 256 * 1024:
+    if len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
         raise ValueError("Configuration exceeds 256 KB.")
     config = unpack(config)
     run = config.get("run_params")
@@ -84,7 +86,7 @@ def assignment_options(assignment):
 
 def normalize_builder_config(config, user, catalog):
     """Persist builder exports after checking blocking requirements."""
-    if not isinstance(config, dict) or len(json.dumps(config, allow_nan=False).encode()) > 256 * 1024:
+    if not isinstance(config, dict) or len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
         raise ValueError("Configuration must be an object no larger than 256 KB.")
     result = copy.deepcopy(config)
     run = result.get("run_params")

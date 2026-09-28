@@ -23,6 +23,7 @@ from openpyxl import Workbook
 from pytest_girder.assertions import assertStatus, assertStatusOk
 from test_dashboard import CATALOG, configuration
 
+from girder_flycut.artifacts import CONFIG_FIELD
 from girder_flycut.generate import generate
 from girder_flycut.import_storage import link_input
 from girder_flycut.registration import is_test_run
@@ -34,6 +35,19 @@ from girder_flycut.validation import normalize_config
 # above all -- so a whole class of production behaviour is invisible here. The
 # configuration snapshot depends on those hooks being present.
 pytestmark = [pytest.mark.plugin("flycut"), pytest.mark.plugin("jsonforms")]
+
+
+def assert_iso(value, label):
+    """A timestamp that reached a file must be ISO-8601, not `str(datetime)`.
+
+    The lifecycle timestamps are datetimes in the database now and are rendered
+    on the way out by girder's JsonEncoder. `str()` on a datetime produces a
+    space separator instead of a `T`, so truthiness alone would not catch a
+    regression here.
+    """
+    assert isinstance(value, str), f"{label} is {type(value).__name__}, not a string"
+    assert "T" in value, f"{label} is not ISO-8601: {value!r}"
+    datetime.fromisoformat(value)
 
 
 @pytest.fixture
@@ -545,14 +559,19 @@ def test_live_foil_catalog_and_dynamic_registration(server, enabled, user, admin
             with File().open(File().load(ObjectId(file["_id"]), force=True)) as stream:
                 rows = list(csv.DictReader(io.StringIO(stream.read().decode())))
             assert rows and {row["status"] for row in rows} == {"registered"}
+            for row in rows:
+                assert_iso(row["time_registered"], "inventory time_registered")
         elif file["name"].endswith("-metadata.json"):
             assert meta["igsn"] == child["igsn"]
-            assert meta["metadata"]["time_registered"]
+            assert_iso(meta["metadata"]["time_registered"], "time_registered")
             assert "config" not in meta
         else:
             assert "config" not in meta
             assert meta["igsn"] == child["igsn"]
-    assert Item().load(saved.json["_id"], force=True)["meta"]["config"] == saved.json["config"]
+    receipt_file = next(f for f in registered.json["files"] if f["name"].endswith("-registration.json"))
+    with File().open(File().load(ObjectId(receipt_file["_id"]), force=True)) as stream:
+        assert_iso(json.load(stream)["registeredAt"], "receipt registeredAt")
+    assert Item().load(saved.json["_id"], force=True)[CONFIG_FIELD] == saved.json["config"]
     assert (
         server.request(endpoint + "/register", method="POST", user=user).json["registration"]
         == registered.json["registration"]
@@ -722,7 +741,10 @@ def test_canonical_config_and_history(server, enabled, user):
     )
     assertStatusOk(saved)
     record = Item().load(saved.json["_id"], force=True)
-    assert record["meta"]["config"] == cfg
+    assert record[CONFIG_FIELD] == cfg
+    # The snapshot lives outside `meta` now, and neither pre-migration home
+    # is left behind.
+    assert "config" not in record["meta"]
     assert "config" not in record["meta"]["flycut"]
     file = File().findOne({"itemId": record["_id"]})
     with File().open(file) as stream:
@@ -736,7 +758,8 @@ def test_canonical_config_and_history(server, enabled, user):
         with File().open(File().load(metadata_file["_id"], force=True)) as stream:
             payload = json.load(stream)
         assert Item().load(metadata_file["itemId"], force=True)["meta"]["metadata"] == payload
-        assert payload["time_submitted"] and payload["time_generated"]
+        assert_iso(payload["time_submitted"], "time_submitted")
+        assert_iso(payload["time_generated"], "time_generated")
         assert payload["time_registered"] is None and payload["time_machined"] is None
         assert payload["material"] == {"igsn": "JHAMAB00010", "name": "Aluminum foil"}
         assert payload["unique_safe"] is True
