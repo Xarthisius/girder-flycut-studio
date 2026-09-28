@@ -225,6 +225,68 @@ async function reopen(page, base, id) {
         check('admin settings stay hidden (G1)', !(await visible(page, '#adminSettingsBtn')));
         await page.screenshot({ path: `${SHOTS}/02-workflow-home.png` });
 
+        // ---- the admin screen -------------------------------------------
+        // Dead UI: the button above is hidden unconditionally, so nothing had
+        // ever rendered this screen. It is a view of its own now, and Decision 4
+        // promotes it to #plugins/flycut/config in Phase 6 -- these checks are
+        // what keep it working across the phases in between. Un-hiding the
+        // button is the only thing the harness does that a user cannot.
+        check('the admin screen is its own section',
+            await page.locator('section#adminSettingsScreen.settings-screen').count() === 1);
+        await page.evaluate(
+            () => document.querySelector('#adminSettingsBtn').classList.remove('hidden'));
+        await page.click('#adminSettingsBtn');
+        await page.waitForSelector('#adminSettingsScreen:not(.hidden)', { timeout: 20000 });
+        check('opening the admin screen loads the policy',
+            (await page.inputValue('#workspacePath')).length > 0,
+            await page.inputValue('#workspacePath'));
+        check('collections are populated',
+            await page.locator('#workspaceCollection option').count() > 0);
+        check('the four principal roles render',
+            await page.locator('#policyLists h3').count() === 4,
+            (await page.locator('#policyLists h3').allTextContents()).join(', '));
+        check('principals are searched on open',
+            await page.locator('#principalResults option').count() > 0);
+
+        // Add a principal, see it listed under its role, then take it back out.
+        // The lists are re-rendered from the policy each time, so this is the
+        // check that the policy and the markup stay in step.
+        const viewers = () => page.locator('#policyLists h3:text-is("Viewers") + ul').innerText();
+        const emptyRole = (await viewers()).trim();
+        check('an empty role reads None', emptyRole === 'None', emptyRole);
+        const principal =
+            (await page.locator('#principalResults option').first().innerText()).split(' (')[0];
+        await page.selectOption('#principalRole', 'viewers');
+        await page.click('#addPrincipalBtn');
+        await page.waitForTimeout(400);
+        check('adding a principal lists it under its role',
+            (await viewers()).includes(principal), principal);
+        await page.click('#addPrincipalBtn');
+        await page.waitForTimeout(400);
+        check('adding the same principal twice does not duplicate it',
+            await page.locator('#policyLists button[data-role="viewers"]').count() === 1);
+        await page.locator('#policyLists button[data-role="viewers"]').first().click();
+        await page.waitForTimeout(400);
+        check('removing it puts the role back to None', (await viewers()).trim() === 'None');
+
+        // Saving writes back exactly what was read -- the added principal is
+        // gone again and #workspacePath was never typed into, so the browsed
+        // folder id still stands and the path is not re-resolved.
+        await page.click('#saveAdminSettingsBtn');
+        await page.waitForFunction(
+            () => document.querySelector('#settingsStatus').textContent.length > 0,
+            { timeout: 20000 });
+        check('saving the policy reports back',
+            (await textOf(page, '#settingsStatus')).startsWith('Settings saved'),
+            await textOf(page, '#settingsStatus'));
+        await page.screenshot({ path: `${SHOTS}/02b-admin-settings.png` });
+        await page.click('#adminSettingsBack');
+        await page.waitForSelector('#workflowHome:not(.hidden)', { timeout: 20000 });
+        check('Back leaves the admin screen for the workflow home',
+            await visible(page, '#configurationStepBtn'));
+        await page.evaluate(
+            () => document.querySelector('#adminSettingsBtn').classList.add('hidden'));
+
         // ---- configuration picker ---------------------------------------
         await page.click('#configurationStepBtn');
         await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 15000 });
@@ -406,6 +468,65 @@ async function reopen(page, base, id) {
                 'a generated configuration is selectable for registration',
                 'registering mints a stack IGSN', 'the IGSN becomes reachable',
                 'the registered stack ID is locked against reuse']) {
+                skip(name, 'no material or template to build a configuration from');
+            }
+        }
+
+        // ---- Complete Workflow ------------------------------------------
+        // The other half of core/submit.js: one click that submits, generates
+        // and registers. It had no browser coverage at all while the
+        // step-by-step path above had plenty, and it is the path with the
+        // failure recovery in it.
+        if (usable) {
+            await reopen(page, BASE, flycut._id);
+            await page.click('#completeWorkflowBtn');
+            await page.waitForSelector('#configurationPicker:not(.hidden)', { timeout: 20000 });
+            check('Complete Workflow retitles the picker',
+                (await textOf(page, '#configurationPickerTitle')) === 'Complete Workflow');
+            check('it shows the automatic-continuation hint',
+                await visible(page, '#completeWorkflowHint'));
+            check('the submit button says what it will do',
+                (await textOf(page, '#submitConfigBtn')) === 'Submit, generate & register');
+
+            await page.click('#buildConfigBtn');
+            await page.waitForSelector('#builderScreen:not(.hidden)', { timeout: 20000 });
+            await page.fill('#operator', ADMIN);
+            const autoStackId = await fillRequiredFields(page, true);
+            await page.click('.g-flycut-dashboard [data-tab="status"]');
+            if (await visible(page, '#validationAckLabel')) {
+                await page.check('#validationAck');
+            }
+            await page.click('#submitConfigBtn');
+            // One click, three server operations. Generation is the slow one.
+            await page.waitForSelector('#registrationPicker:not(.hidden)', { timeout: 120000 })
+                .catch(async (err) => {
+                    const why = await textOf(page, '#runStatus') || await textOf(page, '#toast');
+                    throw new Error(`complete workflow did not finish: ${why || err.message}`);
+                });
+            check('a complete run ends on the registration screen and says so',
+                (await textOf(page, '#runStatus')).startsWith('Complete:'),
+                await textOf(page, '#runStatus'));
+            check('the run’s own configuration is selected on arrival',
+                (await page.inputValue('#registrationConfigs')).length > 0);
+            const autoHint = await textOf(page, '#registrationHint');
+            check('it minted a stack IGSN without a second click',
+                /Registered · .+/.test(autoHint), autoHint);
+            check('and registering it again is refused',
+                await page.locator('#registerStackBtn').isDisabled());
+            const autoStates = await (await fetch(`${BASE}/api/v1/flycut/stack-states`,
+                { headers: { 'Girder-Token': token } })).json();
+            check('its stack ID is spent too',
+                autoStates[autoStackId] === 'registered',
+                `${autoStackId} -> ${autoStates[autoStackId]}`);
+            await page.screenshot({ path: `${SHOTS}/09-complete-workflow.png` });
+        } else {
+            for (const name of ['Complete Workflow retitles the picker',
+                'it shows the automatic-continuation hint',
+                'the submit button says what it will do',
+                'a complete run ends on the registration screen and says so',
+                'the run’s own configuration is selected on arrival',
+                'it minted a stack IGSN without a second click',
+                'and registering it again is refused', 'its stack ID is spent too']) {
                 skip(name, 'no material or template to build a configuration from');
             }
         }

@@ -7,5 +7,13 @@ export {
     normalizeLayerNames, moveLaser, applyMaterialDefaults,
     usedLaserCount, resolveLaserForLayer
 } from './laser.js';
-export { selectableConfigs, groupedOptions, byNewest, STAGES } from './records.js';
+export {
+    selectableConfigs, groupedOptions, byNewest, STAGES,
+    savedTime, selectMarkup, keepSelection
+} from './records.js';
+export {
+    workflowState, homeState, configurationPickerState,
+    generationState, registrationState, keepsActiveConfig
+} from './workflow.js';
+export { runSubmission, submissionOutcome } from './submit.js';
 export { exportDecision, INCOMPLETE, UNACKNOWLEDGED } from './validate.js';

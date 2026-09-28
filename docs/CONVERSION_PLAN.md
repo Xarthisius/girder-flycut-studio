@@ -10,7 +10,7 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 | **Against** | `girder/WEB_CLIENT_CONVENTIONS.md`, `girder/CLAUDE.md`, `girder-dashboards/docs/extending.md` |
 | **Issues** | 33 — 8 critical, 14 major, 11 minor |
 | **Phases** | 7 |
-| **Status** | Phases 0–3 and 4a/4b merged; D2 done; 4c in flight. **19 of 33 closed, 2 partial.** |
+| **Status** | Phases 0–3, 4a/4b and 4c merged; D2 done; 4d in flight. **22 of 33 closed, 1 partial.** |
 
 > The register below is the original audit and its severities are as-found. Entries carry
 > their own revision notes where execution changed the picture. `CLAUDE.md` has the short
@@ -20,25 +20,25 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 
 ## Progress
 
-**Closed (19).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C5 C7 · D2 D3 · E1 E2 E3 · F2 F4.
+**Closed (22).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C4 C5 C7 · D1 D2 D3 · E1 E2 E3 ·
+F2 F4.
 
-**Partly done (2).** C4 — the instantiability half closed in Phase 3. D1 — five of the
-eight source slices gone.
+**Partly done (1).** C1 — the five workflow screens are views; the builder is not.
 
-**Untouched (12).**
+**Untouched (10).**
 
 | Issue | What is left | Phase |
 |---|---|---|
-| **C1** | One view for six screens | 4c — *in flight* |
-| **C2 / C3** | Markup and styles are not yet Pug and Stylus | 4c, with the view split |
-| **C4** | The other half: state is closures, not models | 4c, with the views |
-| **D1** | Three slices left: `renderHome`, `configure`, the submit flow | 4c |
+| **C1** | The builder: `builder.js` is still one closure | 4e — *next* |
+| **C2 / C3** | Markup and styles are not yet Pug and Stylus | 4f, after the builder split |
 | **B4 E4 E5 E6** | Line length, a config model, local imports, the `rest.py` split | 5 |
 | **C6 E7 G1** | The config page and the four endpoints behind it | 6 |
 | **F1 F3** | The vendored dependency; package metadata | 6 |
 
-Every Critical is closed. C4 was the last one open at 4b, and its headline — "cannot be
-instantiated twice" — turned out to have been fixed back in Phase 3.
+Every Critical is closed. C4 closed in 4d with the views: its headline — "cannot be
+instantiated twice" — had been fixed back in Phase 3, and what remained was shape, which
+`WorkflowModel` supplies. D1 closed in the same phase; no test in the repository reads
+source as a string.
 
 ---
 
@@ -267,7 +267,13 @@ running it, neither previously written down: JSONForms' frontend must be built, 
 ### C · Web-client conventions
 
 #### C4 — `app.js` is a module-global singleton and cannot be instantiated twice
-**Critical · ~~Phase 4~~ → the singleton half closed in Phase 3**
+**Critical · ~~Phase 4~~ → closed across Phase 3 and 4d**
+
+*Closed in 4d.* `WorkflowModel` holds `activeConfig`, `saved`, `busy`,
+`completeWorkflow` and `readOnly`; the screens listen to it rather than being
+rendered by a function that could see all five closure variables at once. The
+builder's own state follows in 4e with `LaserCollection` and
+`CustomFieldCollection`, under the views that listen to them.
 
 *Revised in 4c.* The headline is already fixed: Phase 3 wrapped the builder in
 `createBuilder()`, so `state`, `draggedLaserId`, `activeHelp` and the twenty-five
@@ -289,7 +295,12 @@ downstream: no second instance, no clean re-render, no unit test of a view.
 each view instance owns its own.
 
 #### C1 — One Backbone view for six screens
-**Major · Phase 4**
+**Major · Phase 4 · the workflow screens closed in 4d**
+
+*Revised in 4d.* Five of the six are views now — `WorkflowHomeView`,
+`ConfigurationPickerView`, `GenerationPickerView`, `RegistrationPickerView` and
+`AdminSettingsView` — each over a shared `WorkflowModel`, each with an `events`
+hash and a template of its own. The sixth, the builder, is 4e.
 
 A single `Dashboard` view renders `workflowHome`, `configurationPicker`, `lightburnPicker`,
 `registrationPicker`, `builderScreen` and `adminSettingsScreen`, toggling `.hidden` via
@@ -359,7 +370,19 @@ two files.
 ### D · Testing
 
 #### D1 — JavaScript tests extract functions by string-slicing the source
-**Major · Phase 3 (mostly) · remainder in Phase 4**
+**Major · ~~Phase 3 · Phase 4~~ → closed in 4d**
+
+*Closed.* Eight slices became four in Phase 3, then zero. `canLeave` is covered
+against a real page by the browser harness (4c). `renderHome`'s decision is
+`core/workflow.js`, `configure`'s is `keepsActiveConfig`, and the submit flow is
+`core/submit.js` — `runSubmission` still takes its operations as arguments,
+which is what keeps it DOM-free, but they are parameters of an exported
+function rather than the argument list of a `new AsyncFunction`. The
+`no-new-func` disables are gone with them.
+
+Coverage grew rather than moved: the status line's narration between steps, a
+refused export costing nothing, and the selection-driven picker controls all
+gained assertions that the stubbed slices could not express.
 
 *Revised in Phase 3.* Eight slices became four. `tests/status.mjs` imports
 `assessConfiguration`, `restoreImportedLaser` and `exportDecision` outright and slices

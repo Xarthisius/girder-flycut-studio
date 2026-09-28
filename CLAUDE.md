@@ -30,28 +30,41 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 | #5 | 4a | Plugin owns its markup; the deferred `eslint --fix` ran (`A2`, `A6`) |
 | #6 | 4b | Shadow root dropped, stylesheet scoped (Decision 1) |
 | #7 | — | Browser end-to-end harness (`D2`), pulled forward before 4c |
+| #8 | 4c | `girder.dialog.confirm` (`C5`); laser rules to `core/laser.js` |
 
-**In flight:** `phase-4c-dialogs-and-models`, four commits, not yet a PR. Closes `C5`
-(`girder.dialog.confirm`) and extracts the laser-assignment rules to `core/laser.js` with
-unit tests.
+**In flight:** `phase-4d-screens`, four commits, not yet a PR. The five workflow screens
+became views over a `WorkflowModel`, and `D1` is closed — no test reads source as a
+string any more.
 
 ### Where to pick up
 
-Mid-`C1`, the view decomposition. The next concrete step, already scoped:
+`C1`'s second half: the builder. `builder.js` is 425 lines holding the form, the laser
+table and the preview in one closure, and `main.js` is ~230 lines of chrome around it.
+The plan's decomposition is `ConfigBuilderView` composing `RunParametersView`,
+`LaserListView` / `LaserCardView`, `CustomFieldsView`, `PreviewView`, `JsonPanelView`
+and `StatusPanelView`, with `LaserCollection` and `CustomFieldCollection` arriving under
+the views that listen to them.
 
-`renderHome()` in `main.js` is ~25 lines of DOM writes driven by `saved`, `activeConfig`,
-`busy` and two `<select>` values. Extract the *decision* into
-`core/workflow.js::workflowState({...})` returning what each control should be — labels,
-disabled flags, hrefs, hint text — and leave a view to apply it. That:
+The pattern is established and worth following rather than reinventing:
 
-- kills the `renderHome` slice in `tests/workflow.cjs`, which is one of the three
-  remaining `D1` slices, replacing it with an importable test in `tests/core.mjs`;
-- is the same rules-in-`core`, DOM-in-view split used everywhere else here;
-- makes the eventual `WorkflowHomeView` trivial.
+- **Rules to `core/`, writing to the view.** Every screen's state pass is one
+  `applyState()` loop over a description from `core/workflow.js`. `core/laser.js` already
+  holds what a `LaserCollection` would enforce.
+- **A screen's `el` is the screen.** The template holds the section's contents and
+  `tagName`/`id`/`className` supply the wrapper, so nothing nests and `showScreen()` still
+  finds it by id.
+- **Split `render()` from `renderState()`.** The first rebuilds markup and follows the
+  records; the second writes flags and follows `busy`, which changes twice per request.
+- **Models arrive with the views that listen to them**, never before.
 
-Then the three picker views, then the builder screen. A shared Backbone model holding
-`{activeConfig, saved, busy, completeWorkflow, readOnly}` is what the screen views listen
-to; **do not** add it before the views exist, or it is a wrapper nothing listens to.
+Then `C2`/`C3`: the templates are already one file per screen, so Pug is a per-fragment
+translation. `builder.html` is still 92 lines and splits with the builder views.
+
+Two things the builder split has to respect. `createBuilder()` queries the whole mount at
+construction and everything it looks for is in `topbar.html` or `builder.html` — that is
+why the screen views can be built after it. And the four controls in `guard()`'s
+`builderControls()` are the ones the model does not reach; they disappear when the
+builder has a model of its own.
 
 ## Commands
 
@@ -131,10 +144,14 @@ girder_flycut/
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
   generate.py engine.py  LightBurn, CSV and resolved JSON output
   web_client/
-    main.js              the dashboard shell: six screens in one view  (C1 splits this)
-    builder.js           the configuration form  (C1 splits this)
-    core/                DOM-free: assess, laser, records, validate — unit-tested
-    templates/           dashboard.html, imported as a string
+    main.js              the shell: screen visibility, status line, busy guard,
+                         and the builder's chrome  (C1's remaining half)
+    builder.js           the configuration form, still one closure  (C1 splits this)
+    util.js              request, escapeHtml, ask — shared, not DOM-free
+    core/                DOM-free: assess, laser, records, submit, validate, workflow
+    models/              WorkflowModel — what the screens share
+    views/               ScreenView + the five screen views
+    templates/           one .html per screen, imported as strings  (C2 makes them Pug)
     styles/              dashboard.css, imported for its side effect -> dist/style.css
     dist/                built, gitignored, shipped in the wheel
 tests/                   pytest (42) + core.mjs, status.mjs, workflow.cjs,
@@ -164,11 +181,14 @@ anything touching the UI.
 
 ## Traps
 
-- **The `.cjs` suites slice functions out of source by string offsets and `eval` them.**
-  Three slices remain (`renderHome`, `configure`, the submit flow). Those boundaries
-  include *indentation*, and they have broken four times: de-indentation in Phase 2, the
-  file move in Phase 3, `arrow-parens` in 4a, and `async` in 4c. Do not repair a boundary
-  for the fifth time — extract the function and delete the slice.
+- **Source slicing is gone; do not bring it back.** The `.cjs` suites used to extract
+  functions from `main.js` by string offsets and `eval` them, and those boundaries broke
+  four times in four phases — de-indentation in Phase 2, the file move in Phase 3,
+  `arrow-parens` in 4a, `async` in 4c. `D1` closed in 4d. If something in the builder is
+  hard to test, extract it to `core/` rather than reaching for the source text.
+- **A hidden checkbox still reports itself enabled**, and `#validationAck` is only visible
+  once its Status tab is the active one. Submitting without acknowledging fails with a
+  toast and no navigation, which in a Playwright script looks exactly like a hang.
 - **`page.goto` to the URL you are already on does nothing.** All six screens live inside
   the one `#dashboard/:id` route, so the harness has a `reopen()` helper that goes via
   `#dashboards` first.
