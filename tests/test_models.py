@@ -1,4 +1,4 @@
-"""The model layer: containment, derived lifecycle, validation, and the stack mutex."""
+"""The model layer: containment, derived lifecycle, and validation."""
 
 import json
 
@@ -10,7 +10,7 @@ from pytest_girder.assertions import assertStatusOk
 from test_api import enabled  # noqa: F401  -- fixture
 from test_dashboard import configuration
 
-from girder_flycut.models import FlycutConfig, StackLock
+from girder_flycut.models import FlycutConfig
 
 # Both plugins, deliberately. Loading only flycut leaves girder-jsonforms'
 # event bindings unregistered -- `coerce_metadata_dates` on `model.item.save`
@@ -36,7 +36,6 @@ def test_registered_with_the_model_importer(server, enabled):  # noqa: F811
     from girder.utility.model_importer import ModelImporter
 
     assert isinstance(ModelImporter.model("flycutConfig", "flycut"), FlycutConfig)
-    assert isinstance(ModelImporter.model("stackLock", "flycut"), StackLock)
 
 
 def test_model_shares_the_item_collection(server, enabled):  # noqa: F811
@@ -121,32 +120,3 @@ def test_validate_accepts_an_item_with_no_flycut_state(server, enabled, user):  
     folder = Folder().load(_config(server, user)["folderId"], force=True)
     plain = Item().createItem("plain", creator=user, folder=folder)
     assert FlycutConfig().save(plain)["_id"] == plain["_id"]
-
-
-def test_stack_lock_is_a_mutex_and_releases_on_error(server, enabled):  # noqa: F811
-    locks = StackLock()
-    with locks.hold("F100"):
-        with pytest.raises(RestException) as excinfo:
-            with locks.hold("F100"):
-                pass
-        assert excinfo.value.code == 409
-        # A different stack is unaffected.
-        with locks.hold("F200"):
-            pass
-
-    # The outer hold released, so the stack is free again.
-    with locks.hold("F100"):
-        pass
-
-    with pytest.raises(ZeroDivisionError):
-        with locks.hold("F100"):
-            1 / 0
-    assert locks.collection.find_one({"_id": "F100"}) is None
-
-
-def test_stack_lock_ttl_index_is_created(server, enabled):  # noqa: F811
-    locks = StackLock()
-    locks.ensureExpiry()
-    ttl = [i for i in locks.collection.list_indexes() if "expireAfterSeconds" in i]
-    assert len(ttl) == 1
-    assert ttl[0]["key"] == {"acquired": 1}

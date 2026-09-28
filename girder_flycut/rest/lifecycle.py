@@ -1,7 +1,7 @@
 """The three lifecycle transitions: generate, delete files, register.
 
 Each is wrapped in `@stack_locked`, so two workers cannot move the same stack
-at once; the mutex itself is `StackLock`.
+at once; the mutex itself is `stack_mutex`, a Redis lock.
 """
 
 import copy

@@ -12,12 +12,20 @@ the code. Line numbers drift, so each item names an anchor instead.
 |---|---|
 | **Python** | 2,628 lines across 27 modules |
 | **Tests** | 68 pytest at 88%, five Node suites, an 89-check browser harness |
-| **Done** | the two issues that were correctness risks — see PR #21, #22 |
-| **Left** | seven. One is two real bugs in the stack mutex; the rest are cost, clarity, or dead weight |
+| **Done** | the issues that were correctness risks — see PR #21, #22, and item 1 below |
+| **Left** | six. None is a bug; each is cost, clarity, or dead weight |
 
 ---
 
-## 1. The stack mutex has two bugs  *(the only correctness item)*
+## 1. The stack mutex has two bugs  *(done — `redis-stack-lock`)*
+
+**Landed.** Both questions below were answered as recommended: the lock fails closed,
+and `models/lock.py` is gone. `rest/locking.py` now holds the whole mutex — a
+`stack_mutex()` wrapper over `redis-py`'s `Lock` plus the `stack_locked` decorator —
+and `tests/test_locks.py` is six tests, both probes among them, each confirmed to fail
+against the old behaviour before being kept. `redis` is declared in `setup.py`; CI's
+pytest job already provisioned a Redis and its comment now says the lock requires one.
+The record below is why, kept until this document goes.
 
 `stack_locked` is **thread-safe** in the narrow sense, and deliberately so. It
 keeps no shared mutable state, `StackLock()`'s only shared attribute is a
@@ -151,14 +159,14 @@ N; the three endpoints' totals flat as configurations are added.
 
 ---
 
-## 3. Eight of the eighteen direct Mongo writes no longer need to be
+## 3. Eight of the fifteen direct Mongo writes no longer need to be
 
 This was the part of the review with the strongest justification, and **PR #22
 removed most of that justification**. Current state:
 
 | kind | count | verdict |
 |---|---|---|
-| Atomic compare-and-swap, or a mutex | 9 | **Keep.** A read-modify-write would race. |
+| Atomic compare-and-swap, or a mutex | 6 | **Keep.** A read-modify-write would race. |
 | Restoring a file-mirroring payload after a save | 1 | **Keep.** `annotate()`; see below. |
 | Plain partial writes to `meta.flycut` | 8 | **Convertible now.** |
 
@@ -181,11 +189,11 @@ FlycutConfig().setState(item, status="generated", files=..., generatedAt=...)
 FlycutConfig().claim(item, expect="draft", become="deleting")  # the CAS, returns bool
 ```
 
-The nine that stay are `lock()`, the two draft claims in `save_config` and
-`delete_draft` and its rollback, the IGSN reservation's duplicate-key insert, the
-three `StackLock` operations — which item 1 deletes outright, taking the count to
-six — and `link_input`'s `$setUnion` pipeline. Each is an
-atomicity requirement, not a shortcut, and each should say so in one line.
+The six that stay are `lock()`, the two draft claims in `save_config` and
+`delete_draft` and its rollback, the IGSN reservation's duplicate-key insert, and
+`link_input`'s `$setUnion` pipeline. (It was nine; item 1 deleted `StackLock`'s
+three outright.) Each is an atomicity requirement, not a shortcut, and each should
+say so in one line.
 
 `annotate()` stays because the payload it restores is stored *under* `meta` and
 has to equal the artifact file byte for byte — the same invariant
@@ -285,7 +293,7 @@ One per item, in this order. The first two are worth doing; the rest are tidying
 
 | branch | item | why this order |
 |---|---|---|
-| `redis-stack-lock` | 1 | the only correctness item, and it deletes a model |
+| ~~`redis-stack-lock`~~ | ~~1~~ | **done** — the only correctness item, and it deleted a model |
 | `perf-listing-n1` | 2 | the largest cost a user can feel |
 | `model-owns-its-writes` | 3 + 5 | the stack-ID helper falls out of the same work |
 | `split-save-config` | 4 | easier once the model owns the writes |
@@ -297,14 +305,13 @@ provisions one for girder-jsonforms' load-time lock, so nothing there changes.
 
 ## What is still open
 
-1. **Does the stack lock fail closed during a Redis outage?** Item 1 recommends
-   yes — refuse the request rather than run unserialized. It is a behaviour
-   change: today a Redis outage does not stop a generation, and afterwards it
-   would. That is the one judgement call in item 1 worth making deliberately.
-2. **How far does item 3 go?** Converting all eight writes is the consistent
-   answer; converting only the ones outside `finally` blocks is the conservative
-   one. The difference is whether a whole-document save in a cleanup path is
-   acceptable when the lock is already held.
+1. ~~**Does the stack lock fail closed during a Redis outage?**~~ **Answered: yes.**
+   A Redis outage now refuses the request rather than running unserialized. This is
+   the behaviour change item 1 shipped: before, an outage did not stop a generation.
+2. ~~**How far does item 3 go?**~~ **Answered: all eight.** Every convertible write
+   becomes a model method, cleanup paths included — each is already inside
+   `@stack_locked`, which is what makes a whole-document save safe there. Confirm
+   that per site while converting, as item 3 says.
 
 *(The earlier question — whether `lock()` survives — is answered in item 6. It
 does.)*

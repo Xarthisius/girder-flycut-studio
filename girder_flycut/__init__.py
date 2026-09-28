@@ -21,12 +21,11 @@ class FlycutPlugin(GirderPlugin):
         # Deferred on purpose: settings.py does `from . import KEY`, so importing
         # either of these at module scope is circular.
         from . import migrations
-        from .models import FlycutConfig, StackLock
+        from .models import FlycutConfig
         from .rest import Flycut
         from .settings import DEFAULTS, validate_dashboard
 
         ModelImporter.registerModel("flycutConfig", FlycutConfig, plugin="flycut")
-        ModelImporter.registerModel("stackLock", StackLock, plugin="flycut")
 
         events.bind("model.dashboard.save", "flycut.settings", validate_dashboard)
 
@@ -39,10 +38,9 @@ class FlycutPlugin(GirderPlugin):
             settings=DEFAULTS,
         )
         self._renameLegacyDashboard()
-        # Neither of these may abort the load: a plugin that refuses to import
-        # takes the whole Girder server with it, and everything below is a
-        # convenience rather than a precondition for serving requests.
-        self._guard("could not add the stack-lock TTL index", StackLock().ensureExpiry)
+        # This may not abort the load: a plugin that refuses to import takes the
+        # whole Girder server with it, and a migration is a convenience rather
+        # than a precondition for serving requests.
         self._guard("could not migrate stored configurations", migrations.run)
         info["apiRoot"].flycut = Flycut()
         registerPluginStaticContent(
