@@ -7,7 +7,7 @@
  */
 import { keepSelection, savedTime, selectMarkup } from '../core/records.js';
 import { registrationState } from '../core/workflow.js';
-import registrationPickerTemplate from '../templates/registrationPicker.html?raw';
+import registrationPickerTemplate from '../templates/registrationPicker.pug';
 import { request } from '../util.js';
 import ScreenView from './ScreenView.js';
 

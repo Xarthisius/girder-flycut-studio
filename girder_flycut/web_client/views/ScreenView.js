@@ -37,7 +37,7 @@ const ScreenView = View.extend({
 
     render: function () {
         if (!this.$el.children().length) {
-            this.$el.html(this.template);
+            this.$el.html(this.template());
             this.onFirstRender();
         }
         this.renderContent();

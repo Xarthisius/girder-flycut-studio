@@ -1,0 +1,12 @@
+include formSection
+
++sectionSummary('03', 'Custom Fields')
+  span#customCount.section-count 0 fields
+.section-body
+  #customList.custom-list
+  button#addCustomBtn.button.dashed(type='button')
+    span ＋
+    |  Add custom field
+  #fieldRecommendations.field-recommendations
+  datalist#customFieldNames
+  p#customError.section-error(role='alert')

@@ -1,0 +1,32 @@
+include formSection
+
++sectionSummary('01', 'Run Parameters')(marker=true)
+.section-body.two-col
+  label.field(for='stackid')
+    span.field-label
+      | Stack ID #[span.required *] #[+help('Stack ID help', 'A unique stack identifier: a 5-character Crockford ID or legacy F### / F#### ID. Other values require confirmation.')]
+    .template-picker-row
+      input#stackid(name='stackid', placeholder='e.g. 00005', required)
+      button#autoStackIdBtn.button.ghost(type='button', aria-label='Assign lowest available Stack ID', aria-pressed='false', title='Assign lowest available Stack ID') AUTO
+    small#stackidError.error
+  label.field(for='operator')
+    span.field-label
+      | Operator #[+help('Operator help', 'The person preparing and running this stack.')]
+    span.input-wrap
+      input#operator(name='operator', list='operatorNames', autocomplete='off', placeholder='Name or initials')
+    datalist#operatorNames
+    small#operatorError.error
+  label.field
+    span.field-label
+      | Foil material #[span.required *]
+    select#foilMaterial(name='foil_material')
+      option(value='') Loading materials…
+    small#materialMeta.field-note Foil IGSNs from Girder
+  label.field(for='template')
+    span.field-label
+      | Template #[span.required *] #[+help('Template help', 'Choose the LightBurn layout whose flyer positions and laser layers will be configured.')]
+    .template-picker-row
+      select#template(name='template')
+        option(value='') Loading templates…
+      button#browseTemplateBtn.button.ghost(type='button', aria-label='Choose template from portal', title='Choose template from portal') +
+    small#templateMeta.field-note

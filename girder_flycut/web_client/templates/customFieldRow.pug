@@ -1,0 +1,12 @@
+//- One custom metadata row.
+//-
+//- `fixed` means a preset requires this field, so its name cannot be retyped
+//- and the row cannot be removed.
+.custom-row(data-id=row.id)
+  label
+    | Field name
+    input(data-key='name', readonly=fixed, list='customFieldNames', autocomplete='off', value=row.name, placeholder='e.g. batch_code')
+  label
+    | Value
+    input(data-key='value', value=row.value, placeholder='Enter a value')
+  button.remove-btn.remove-custom(class={hidden: fixed}, type='button', aria-label='Remove custom field') ×

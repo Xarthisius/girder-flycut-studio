@@ -8,7 +8,7 @@
  */
 import { keepSelection, savedTime, selectMarkup } from '../core/records.js';
 import { generationState } from '../core/workflow.js';
-import lightburnPickerTemplate from '../templates/lightburnPicker.html?raw';
+import lightburnPickerTemplate from '../templates/lightburnPicker.pug';
 import { ask, request } from '../util.js';
 import ScreenView from './ScreenView.js';
 

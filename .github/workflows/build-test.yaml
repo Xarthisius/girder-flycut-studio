@@ -37,10 +37,9 @@ jobs:
       - name: Lint Python
         run: ruff check .
 
-      # The browser sources are plain scripts assembled by build_dashboard.py,
-      # so eslint is the only thing that reads them. Formatting rules are off
-      # on purpose -- see .eslintrc.md.
-      - name: Lint JavaScript
+      # eslint over every browser source, then pug-lint over every template.
+      # stylelint joins when the stylesheet becomes Stylus.
+      - name: Lint the browser sources
         run: npm run lint
 
       # Generates the three derived sources from config_builder/static/ and

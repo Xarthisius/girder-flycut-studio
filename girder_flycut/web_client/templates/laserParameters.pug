@@ -1,0 +1,28 @@
+include formSection
+
++sectionSummary('02', 'Laser Parameters')
+  span#laserCount.section-count 1 / 28
+.section-body
+  h3.section-subtitle Selection style
+  .assignment-controls
+    label.field.checkbox-field(for='allowWraparound')
+      input#allowWraparound(type='checkbox', checked)
+      |  #[span.field-label Wraparound #[+help('Wraparound help', 'Start again at the first setting when the template has more layers than the listed settings cover.')]]
+    label#repeatWrap.field(for='repeatX')
+      span.field-label
+        | Repeat each setting for #[+help('Repeat each setting help', 'Apply each listed setting to this many consecutive template layers before moving to the next setting.')]
+      span.repeat-input
+        input#repeatX(name='repeat_x', type='number', min='1', max='10000', step='1', value='1')
+        span layers
+  h3.section-subtitle Parameters
+  #laserList.laser-list
+  button#addLaserBtn.button.dashed(type='button')
+    span ＋
+    |  Add laser setting
+  .excel-import
+    input#excelFile(type='file', accept='.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', hidden)
+    button#importExcelBtn.button.ghost(type='button')
+      span(aria-hidden='true') ⇧
+      |  Import from Excel
+    small#excelStatus
+  p#laserError.section-error(role='alert')
