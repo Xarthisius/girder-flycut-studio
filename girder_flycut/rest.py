@@ -36,6 +36,7 @@ from .generate import generate
 from .import_storage import link_input, load_input, store_workbook
 from .inventory import register_inventory
 from .materials import foil_materials, resolve_material
+from .models import FlycutConfig, StackLock
 from .portal_templates import load_portal_template
 from .registration import foil_identifiers, is_test_run, stack_metadata
 from .schema import pack, unpack
@@ -43,32 +44,6 @@ from .storage import draft_root, promote, remove_config
 from .validation import builder_warnings, normalize_builder_config, normalize_config
 
 CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
-
-
-# How long a stack may stay locked before Mongo reclaims it. Generation is
-# synchronous, so a legitimate operation finishes far inside this; the window
-# only has to be wider than the slowest honest request.
-STACK_LOCK_TTL_SECONDS = 900
-
-LOCK_COLLECTION = "flycut_stack_locks"
-
-
-def stack_locks():
-    """The stack mutex collection."""
-    return Item().collection.database[LOCK_COLLECTION]
-
-
-def ensure_lock_expiry():
-    """Give the stack mutex a TTL so a crashed worker cannot wedge a stack.
-
-    Without this, a process that dies between insert_one and delete_one leaves
-    the lock document behind and every later request for that stack ID answers
-    409 forever, with no operator-visible way to clear it.
-
-    Documents written before this index existed carry no `acquired` field and
-    are therefore never expired by it -- drop them by hand if any are stuck.
-    """
-    stack_locks().create_index("acquired", expireAfterSeconds=STACK_LOCK_TTL_SECONDS)
 
 
 def stack_locked(method):
@@ -80,17 +55,10 @@ def stack_locked(method):
             raw = kwargs.get("config", args[0] if args else {})
         else:
             identifier = kwargs.get("id", args[0] if args else "")
-            raw = configuration(self.config_item(identifier, self.gate()))
+            raw = configuration(FlycutConfig().load(identifier, user=self.gate()))
         stack = str(unpack(raw).get("run_params", {}).get("stackid", "")).strip().upper()
-        locks = stack_locks()
-        try:
-            locks.insert_one({"_id": stack, "acquired": datetime.now(timezone.utc)})
-        except DuplicateKeyError:
-            raise RestException("This stack is being changed. Try again when that operation finishes.", code=409)
-        try:
+        with StackLock().hold(stack):
             return method(self, *args, **kwargs)
-        finally:
-            locks.delete_one({"_id": stack})
 
     return wrapped
 
@@ -179,43 +147,6 @@ class Flycut(Resource):
     def workspace(self, user, create=False):
         return studio_settings.workspace(user, write=create)
 
-    def in_workspace(self, item):
-        workspace_id = studio_settings.policy()["workspace_folder_id"]
-        folder = Folder().load(item["folderId"], force=True)
-        if not workspace_id or not folder:
-            return False
-        if str(folder["_id"]) == workspace_id:
-            return True
-        if (
-            item.get("meta", {}).get("flycut", {}).get("workspaceId") != workspace_id
-            or folder.get("parentCollection") != "folder"
-        ):
-            return False
-        if str(folder["parentId"]) == workspace_id:
-            return True
-        parent = Folder().load(folder["parentId"], force=True)
-        return bool(
-            parent
-            and str(parent.get("parentId")) == workspace_id
-            and parent.get("meta", {}).get("flycutDraftsWorkspace") == workspace_id
-        )
-
-    def config_item(self, id, user):
-        item = Item().load(id, user=user, level=AccessType.WRITE, exc=True)
-        if "flycut" not in item.get("meta", {}) or not self.in_workspace(item):
-            raise RestException("Not a configuration in this Flyer Studio workspace.", code=403)
-        return item
-
-    def lifecycle(self, item):
-        state = item["meta"]["flycut"]
-        if state.get("registration") or state.get("status") == "registered":
-            return "registered"
-        if state.get("status") == "draft":
-            return "draft"
-        if any(File().findOne({"_id": ObjectId(file["_id"])}) for file in state.get("files", [])):
-            return "generated"
-        return "submitted"
-
     def stack_matches(self, stack):
         return [
             item
@@ -231,28 +162,15 @@ class Flycut(Resource):
         result = {}
         for item in Item().find({**CONFIG_QUERY, "meta.flycut.status": {"$ne": "draft"}}):
             stack = str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip().upper()
-            status = self.lifecycle(item)
+            status = FlycutConfig().lifecycle(item)
             if (
-                not self.in_workspace(item) or not Item().hasAccess(item, user, AccessType.WRITE)
+                not FlycutConfig().inWorkspace(item) or not Item().hasAccess(item, user, AccessType.WRITE)
             ) and status == "submitted":
                 status = "restricted"
             rank = {"submitted": 1, "restricted": 2, "generated": 3, "registered": 4}
             if rank[status] > rank.get(result.get(stack), 0):
                 result[stack] = status
         return result
-
-    def serialize(self, item):
-        timestamp = item.get("updated", item.get("created"))
-        fallback = timestamp.replace(tzinfo=timezone.utc).isoformat() if timestamp else ""
-        return {
-            "_id": str(item["_id"]),
-            "name": item["name"],
-            "savedAt": fallback,
-            **item["meta"]["flycut"],
-            "config": configuration(item),
-            "status": self.lifecycle(item),
-            "canEdit": Item().hasAccess(item, self.getCurrentUser(), AccessType.WRITE),
-        }
 
     @access.user
     @autoDescribeRoute(Description("Configuration catalog and signed-in operator."))
@@ -344,9 +262,9 @@ class Flycut(Resource):
         if not workspace_id:
             return []
         records = [
-            self.serialize(i)
+            FlycutConfig().filter(i, user)
             for i in Item().find(CONFIG_QUERY)
-            if self.in_workspace(i) and Item().hasAccess(i, user, AccessType.READ)
+            if FlycutConfig().inWorkspace(i) and Item().hasAccess(i, user, AccessType.READ)
         ]
         return sorted(records, key=lambda record: str(record.get("savedAt") or ""), reverse=True)[:100]
 
@@ -382,7 +300,7 @@ class Flycut(Resource):
             {
                 str(unpack(configuration(item)).get("run_params", {}).get("stackid", "")).strip()
                 for item in records
-                if self.in_workspace(item) and Item().hasAccess(item, user, AccessType.READ)
+                if FlycutConfig().inWorkspace(item) and Item().hasAccess(item, user, AccessType.READ)
             }
             - {""}
         )
@@ -404,7 +322,7 @@ class Flycut(Resource):
         rendered_config = copy.deepcopy(config) if "run_parameters" in config else pack(config)
         rendered_config.pop("createdBy", None)
         rendered_config["preset"] = None
-        existing = self.config_item(id, user) if id else None
+        existing = FlycutConfig().load(id, user=user) if id else None
         if existing and existing["meta"]["flycut"].get("status") != "draft":
             raise RestException("Submitted configurations cannot be edited. Make a copy.", code=409)
         try:
@@ -447,12 +365,12 @@ class Flycut(Resource):
             state["submittedAt"] = state["savedAt"]
             matches = self.stack_matches(stack)
             for match in matches:
-                lifecycle = self.lifecycle(match)
+                lifecycle = FlycutConfig().lifecycle(match)
                 if lifecycle == "registered":
                     raise RestException("This Stack ID is registered and cannot be reused.", code=409)
                 if lifecycle == "generated":
                     raise RestException("Delete the generated files before reusing this Stack ID.", code=409)
-                if not self.in_workspace(match) or not Item().hasAccess(match, user, AccessType.WRITE):
+                if not FlycutConfig().inWorkspace(match) or not Item().hasAccess(match, user, AccessType.WRITE):
                     raise RestException("This Stack ID belongs to another user.", code=409)
             if matches:
                 if not validated:
@@ -468,7 +386,9 @@ class Flycut(Resource):
                     remove_config(duplicate, studio_settings.policy()["workspace_folder_id"])
                 if existing and existing["_id"] != target["_id"]:
                     remove_config(existing, studio_settings.policy()["workspace_folder_id"])
-                return self.serialize(save_config_file(Item().load(target["_id"], force=True), user, rendered_config))
+                return FlycutConfig().filter(
+                    save_config_file(Item().load(target["_id"], force=True), user, rendered_config), user
+                )
         if existing:
             if submit:
                 promote(existing, self.workspace(user, True), stack, user)
@@ -489,18 +409,20 @@ class Flycut(Resource):
                 raise RestException("A folder for this stack already exists in the workspace.", code=409)
             folder = Folder().createFolder(parent, folder_name, creator=user, public=False)
             folder = studio_settings.apply_access(Folder(), folder, studio_settings.policy(), user)
-            item = Item().createItem(name, creator=user, folder=folder)
-            item = Item().setMetadata(item, {"flycut": state, "config": copy.deepcopy(rendered_config)})
+            # Through the model, not Item(), so FlycutConfig.validate() runs on the
+            # one write that brings a configuration into existence.
+            item = FlycutConfig().createItem(name, creator=user, folder=folder)
+            item = FlycutConfig().setMetadata(item, {"flycut": state, "config": copy.deepcopy(rendered_config)})
             if submit and item["name"] != name:
                 Item().collection.update_one({"_id": item["_id"]}, {"$set": {"name": name}})
                 item["name"] = name
-        return self.serialize(save_config_file(item, user, rendered_config))
+        return FlycutConfig().filter(save_config_file(item, user, rendered_config), user)
 
     @access.user
     @autoDescribeRoute(Description("Delete your editable draft.").param("id", "Draft ID", paramType="path"))
     def delete_draft(self, id):
         user = self.gate()
-        item = self.config_item(id, user)
+        item = FlycutConfig().load(id, user=user)
         # Claim only a draft, so a concurrent submission cannot be deleted.
         result = Item().collection.update_one(
             {"_id": item["_id"], "meta.flycut.status": "draft"}, {"$set": {"meta.flycut.status": "deleting"}}
@@ -531,14 +453,14 @@ class Flycut(Resource):
     @stack_locked
     def generate_config(self, id):
         user = self.gate()
-        item = self.config_item(id, user)
+        item = FlycutConfig().load(id, user=user)
         if item["meta"]["flycut"].get("status") == "draft":
             raise RestException("Submit the draft before generating files.")
-        if self.lifecycle(item) in {"generated", "registered"}:
-            return self.serialize(item)
+        if FlycutConfig().lifecycle(item) in {"generated", "registered"}:
+            return FlycutConfig().filter(item, user)
         stack = unpack(configuration(item))["run_params"]["stackid"]
         if any(
-            other["_id"] != item["_id"] and self.lifecycle(other) in {"generated", "registered"}
+            other["_id"] != item["_id"] and FlycutConfig().lifecycle(other) in {"generated", "registered"}
             for other in self.stack_matches(stack)
         ):
             raise RestException("Another configuration for this Stack ID is generated or registered.", code=409)
@@ -546,9 +468,9 @@ class Flycut(Resource):
         folder = None
         files = []
         try:
-            item = self.config_item(id, user)
-            if self.lifecycle(item) in {"generated", "registered"}:
-                return self.serialize(item)
+            item = FlycutConfig().load(id, user=user)
+            if FlycutConfig().lifecycle(item) in {"generated", "registered"}:
+                return FlycutConfig().filter(item, user)
             raw_config = unpack(configuration(item))
             material = resolve_material(raw_config["run_params"]["foil_material"], user)
             raw_config["run_params"]["foil_material"] = material["id"]
@@ -594,7 +516,7 @@ class Flycut(Resource):
             raise
         finally:
             Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta.flycut.busy": False}})
-        return self.serialize(self.config_item(id, user))
+        return FlycutConfig().filter(FlycutConfig().load(id, user=user), user)
 
     @access.user
     @autoDescribeRoute(
@@ -603,8 +525,8 @@ class Flycut(Resource):
     @stack_locked
     def delete_files(self, id):
         user = self.gate()
-        item = self.config_item(id, user)
-        if self.lifecycle(item) == "registered":
+        item = FlycutConfig().load(id, user=user)
+        if FlycutConfig().lifecycle(item) == "registered":
             raise RestException("Registered stacks cannot have their generated files deleted here.", code=409)
         for artifact in item["meta"]["flycut"].get("files", []):
             file = File().load(ObjectId(artifact["_id"]), user=user, level=AccessType.WRITE)
@@ -621,7 +543,7 @@ class Flycut(Resource):
                 "$unset": {"meta.flycut.files": "", "meta.flycut.folderId": "", "meta.flycut.generatedAt": ""},
             },
         )
-        return self.serialize(self.config_item(id, user))
+        return FlycutConfig().filter(FlycutConfig().load(id, user=user), user)
 
     @access.user
     @autoDescribeRoute(
@@ -630,12 +552,12 @@ class Flycut(Resource):
     @stack_locked
     def register_config(self, id):
         user = self.gate()
-        item = self.config_item(id, user)
+        item = FlycutConfig().load(id, user=user)
         state = item["meta"]["flycut"]
-        if self.lifecycle(item) != "registered" and not state.get("files"):
+        if FlycutConfig().lifecycle(item) != "registered" and not state.get("files"):
             raise RestException("Generate files before registering.")
         if state.get("registration"):
-            return self.serialize(item)
+            return FlycutConfig().filter(item, user)
         try:
             # Deferred deliberately: this is the 503 path, not a lazy import.
             # See the note in materials.py.
@@ -761,4 +683,4 @@ class Flycut(Resource):
             )
         finally:
             Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta.flycut.busy": False}})
-        return self.serialize(self.config_item(id, user))
+        return FlycutConfig().filter(FlycutConfig().load(id, user=user), user)

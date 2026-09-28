@@ -5,6 +5,7 @@ from pathlib import Path
 
 from girder import events
 from girder.plugin import GirderPlugin, getPlugin, registerPluginStaticContent
+from girder.utility.model_importer import ModelImporter
 from girder_dashboards import registerDashboard
 from girder_dashboards.models.dashboard import Dashboard
 
@@ -19,8 +20,12 @@ class FlycutPlugin(GirderPlugin):
     def load(self, info):
         # Deferred on purpose: settings.py does `from . import KEY`, so importing
         # either of these at module scope is circular.
-        from .rest import Flycut, ensure_lock_expiry
+        from .models import FlycutConfig, StackLock
+        from .rest import Flycut
         from .settings import DEFAULTS, validate_dashboard
+
+        ModelImporter.registerModel("flycutConfig", FlycutConfig, plugin="flycut")
+        ModelImporter.registerModel("stackLock", StackLock, plugin="flycut")
 
         events.bind("model.dashboard.save", "flycut.settings", validate_dashboard)
 
@@ -36,7 +41,7 @@ class FlycutPlugin(GirderPlugin):
         # Neither of these may abort the load: a plugin that refuses to import
         # takes the whole Girder server with it, and everything below is a
         # convenience rather than a precondition for serving requests.
-        self._guard("could not add the stack-lock TTL index", ensure_lock_expiry)
+        self._guard("could not add the stack-lock TTL index", StackLock().ensureExpiry)
         info["apiRoot"].flycut = Flycut()
         registerPluginStaticContent(
             plugin="flycut",
