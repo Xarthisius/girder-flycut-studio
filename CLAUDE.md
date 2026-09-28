@@ -33,10 +33,11 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 | #8 | 4c | `girder.dialog.confirm` (`C5`); laser rules to `core/laser.js` |
 | #9 | 4d | The five screens became views over a `WorkflowModel` (`D1`, most of `C1`) |
 | #10 | 4e | `builder.js` became six views over a model and two collections (`C1`, `C4`) |
+| #11 | 4f | Pug and Stylus (`C2`, `C3`); the client became its own npm project |
 
-**In flight:** `phase-4f-pug-stylus`, three commits, not yet a PR. Pug and Stylus
-(`C2`, `C3`), and the client became its own npm project. **Phase 4 is complete** — 25 of
-33 closed.
+**Phase 4 is complete** — 25 of 33 closed.
+
+**In flight:** `phase-5a-imports-and-format`, two commits, not yet a PR. `E5` and `B4`.
 
 ### Where to pick up
 
@@ -49,12 +50,14 @@ is disposable; delete it when Phase 6 lands.
   `validate()`, lifecycle and workspace containment — the logic now spread across `gate`,
   `config_item`, `in_workspace`, `lifecycle` and `serialize`. *(`E4`)*
 - **`StackLock` model** formalising the Phase 0 TTL fix behind the model layer. *(`E2`)*
-- **Split `rest.py`** — 515 lines, 18 routes — into `rest/config.py`, `rest/template.py`,
+- **Split `rest.py`** — 764 lines, 18 routes — into `rest/config.py`, `rest/template.py`,
   `rest/settings.py`; replace the 14 `self.gate()` calls with one decorator and use
   `modelParam` where a document is loaded by id. *(`E6`)*
-- **Hoist every function-local import**, removing the three redundant `ObjectId`
-  re-imports. *(`E5`)*
-- **`ruff format` plus `I`, at 120 columns** — Decision 5. 18 files change. *(`B4`)*
+- ~~**Hoist every function-local import.** *(`E5`)*~~ Done in 5a. Two sites stay
+  deferred and say why: the circular pair in `FlycutPlugin.load()`, and
+  `girder_jsonforms` in `materials.py` and `rest.py`, whose `register_config()` site is
+  a `try`/`except ImportError` that degrades to a 503 rather than a lazy import.
+- ~~**`ruff format` plus `I`, at 120 columns** — Decision 5. *(`B4`)*~~ Done in 5a.
 
 `pytest tests` is 42 tests at 87% coverage and is the safety net for all of it; run it
 after each step rather than at the end.
@@ -150,7 +153,7 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 ```
 girder_flycut/
   __init__.py            FlycutPlugin.load() — registers the dashboard and the REST resource
-  rest.py                18 routes under /api/v1/flycut  (604 lines; Phase 5 splits it)
+  rest.py                18 routes under /api/v1/flycut  (764 lines; Phase 5 splits it)
   settings.py            dashboard policy + validate_dashboard, bound to model.dashboard.save
   generate.py engine.py  LightBurn, CSV and resolved JSON output
   web_client/
@@ -182,15 +185,18 @@ anything touching the UI.
   deliberate exceptions, both explained in `.eslintrc.md`: `promise/no-native` is off
   permanently (the builder is plain DOM with its own `fetch` shim, not Backbone using
   jQuery deferreds), and `no-new-func` is disabled in two suites that still slice source.
-- **Python** is `ruff check` at `E4,E7,E9,F`. `I` and `E501` are deferred to Phase 5 per
-  Decision 5, which settled on `ruff format` plus import sorting at 120 columns.
+- **Python** is `ruff format` plus `ruff check` at `E4,E5,E7,E9,F,I`, at 120 columns —
+  Decision 5, applied in Phase 5a. CI gates `ruff format --check .` as well as
+  `ruff check .`, so ruff is pinned exactly in `requirements-dev.txt` and the workflow;
+  bump both together. Three prose lines were rewrapped by hand because the formatter
+  will not touch them.
 - **Styles** are scoped under a single `.g-flycut-dashboard` class rather than prefixing
   each of 288 selectors — which is what the conventions actually ask for. There is no
   shadow root; that class is the only thing keeping the dashboard's CSS away from Girder
   core, and `tests/bundle.cjs` fails if a rule escapes it.
-- **Not yet converted:** markup is `.html` and styles are `.css`, not Pug and Stylus. That
-  lands with `C1`, when the monolith is split into per-view templates — converting first
-  would mean translating one file and immediately re-splitting it.
+- **Markup is Pug and styles are Stylus**, one file per view, converted in 4f once `C1`
+  had split the monolith into per-view templates. See the Stylus trap below — it
+  evaluates the right-hand side, so several CSS functions need `unquote()`.
 
 ## Traps
 
