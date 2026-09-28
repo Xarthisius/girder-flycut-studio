@@ -1,4 +1,5 @@
 include README.md
+include LICENSE
 recursive-include girder_flycut *.py *.json *.lbrn2
 prune girder_flycut/web_client
 include girder_flycut/web_client/dist/girder-plugin-flycut.umd.cjs
