@@ -40,10 +40,6 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 
 **The conversion is complete** — all 33 issues closed, Phases 0 through 6.
 
-**In flight:** three stacked branches, not yet PRs, to be merged in order —
-`phase-6a-drop-vendor` (`F1`), `phase-6b-config-page` (`C6`, `E7`, `G1`) and
-`phase-6c-metadata` (`F3`).
-
 **The backend review is finished.** `docs/BACKEND_REVIEW.md` held seven measured items
 and is gone, as it said it should be; each landed on a branch of its own, in order:
 
@@ -66,9 +62,11 @@ was disposable and is gone.
 
 What Phase 6 changed, in case it is not obvious from the tree:
 
-- **There is no `vendor/`.** girder-dashboards is `==0.2.0` from PyPI, whose nine files
-  were byte-identical to the snapshot. Both dependencies are ordinary releases now, so
-  CI just runs `pip install -e .` and lets pip resolve them.
+- **There is no `vendor/`, and CI enforces it.** girder-dashboards is `==0.2.0` from
+  PyPI, whose nine files were byte-identical to the snapshot. Both dependencies are
+  ordinary releases now, so CI just runs `pip install -e .` and lets pip resolve them.
+  `/vendor/` is gitignored and the fast lane's first step fails if anything under it is
+  ever tracked again — see the `build/` trap below for why both are needed.
 - **The policy screen is a Girder plugin config page** at `#plugins/flycut/config`,
   registered in `web_client/routes.js` and framed by `ConfigView`. It uses Girder's own
   Bootstrap classes and none of this plugin's CSS — it is an admin-console page, not a
@@ -321,6 +319,13 @@ anything touching the UI.
   in. Delete `girder_flycut.egg-info/` before checking what a wheel ships.
 - **A bare `build/` in `.gitignore` matches nested directories too.** It silently kept
   `girder_flycut/web_client/build/` out of version control; it is anchored `/build/` now.
+- **Anchoring an ignore rule un-ignores whatever it used to cover.** Anchoring `build/`
+  above exposed `vendor/girder-dashboards/build/`, and the very commit that deleted the
+  vendored source swept its build output back in with a sweeping `git add` — seven files
+  survived a deletion that the commit message, and this file, both said was complete.
+  After changing any `.gitignore` rule, run `git status --short` and read what newly
+  appears before staging. `/vendor/` is now ignored outright, and CI checks
+  `git ls-files vendor` because an ignore rule only stops the accident, not a `-f`.
 
 ## Verifying a change
 

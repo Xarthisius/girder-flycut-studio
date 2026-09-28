@@ -4,6 +4,11 @@ __pycache__/
 # Root-anchored: a bare `build/` also matched girder_flycut/web_client/build/,
 # silently keeping the source generator out of version control.
 /build/
+# Nothing is vendored: both dependencies are ordinary PyPI releases. This is
+# here because anchoring `build/` above un-ignored vendor/girder-dashboards/build/,
+# and the same commit that deleted the vendored source swept its build output
+# back in. CI fails if anything under here is ever tracked again.
+/vendor/
 dist/
 .pytest_cache/
 .venv/
