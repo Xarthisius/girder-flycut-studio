@@ -223,6 +223,9 @@ anything touching the UI.
 
 ## Traps
 
+- **`ruff format` reaches into Markdown.** It formats Python inside fenced code blocks in
+  `.md` files too, so a docs-only change can fail the lint gate. `ruff check .` does not
+  catch it — run `ruff format --check .` as well, which is what CI does.
 - **A pytest suite must name every plugin whose events it depends on.**
   `@pytest.mark.plugin` markers stack, and pytest_girder loads only what they name — so
   `plugin("flycut")` alone leaves girder-jsonforms' bindings unregistered and a whole
