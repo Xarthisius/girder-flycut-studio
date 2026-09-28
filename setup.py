@@ -50,12 +50,10 @@ setup(
     python_requires=">=3.10",
     install_requires=[
         "girder-dashboards>=0.2.0",
-        # Flyer Studio registers each stack as a child deposition, which needs
-        # create_batch()'s relation_type / inverse_relation_type / child_titles
-        # arguments. That work lives on the `igsn` branch and has never been
-        # released to PyPI, so this is a direct git reference rather than a
-        # version range. See docs/JSONFORMS_COMPATIBILITY.md.
-        "girder-jsonforms @ git+https://github.com/Xarthisius/girder-jsonforms.git@igsn",
+        # 2.1.1 is the first release carrying create_batch()'s relation_type /
+        # inverse_relation_type / child_titles arguments, which registering a
+        # stack as a child deposition needs. See docs/JSONFORMS_COMPATIBILITY.md.
+        "girder-jsonforms>=2.1.1",
     ],
     entry_points={"girder.plugin": ["flycut = girder_flycut:FlycutPlugin"]},
 )

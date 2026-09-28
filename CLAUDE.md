@@ -53,8 +53,8 @@ was disposable and is gone.
 What Phase 6 changed, in case it is not obvious from the tree:
 
 - **There is no `vendor/`.** girder-dashboards is `==0.2.0` from PyPI, whose nine files
-  were byte-identical to the snapshot. Both CI jobs install it explicitly, because they
-  install this plugin with `--no-deps` and pip would otherwise never resolve it.
+  were byte-identical to the snapshot. Both dependencies are ordinary releases now, so
+  CI just runs `pip install -e .` and lets pip resolve them.
 - **The policy screen is a Girder plugin config page** at `#plugins/flycut/config`,
   registered in `web_client/routes.js` and framed by `ConfigView`. It uses Girder's own
   Bootstrap classes and none of this plugin's CSS — it is an admin-console page, not a
@@ -152,6 +152,12 @@ None of these are inferable from the code. Each one cost a red CI run or worse.
 - **`GET /deposition` nests the DataCite fields under `metadata`**; the document the
   create call returns has them at top level. Matching the wrong shape makes a "find or
   create" helper create every time.
+- **Both dependencies ship a prebuilt frontend in their wheel**, which is why a plain
+  `pip install .` is now enough. girder-jsonforms used to be a git reference to an
+  unreleased `igsn` branch, and a pip-from-git install carries no `web_client/dist`, so
+  `load()` raised `FileNotFoundError` on `style.css` before anything could touch the
+  server. That is what the clone-and-build step in CI, the `--no-deps` flag and the 503
+  guard in `register_config()` all existed for. 2.1.1 released it; they are all gone.
 - **A standalone deployment must set `jsonforms.projects_enabled` to `false`.** It
   defaults to `true`, and `propagate_to_projects()` then raises a 404 resolving an AIMDL
   collection that does not exist. See `docs/JSONFORMS_COMPATIBILITY.md`.

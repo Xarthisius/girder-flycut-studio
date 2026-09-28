@@ -1,28 +1,28 @@
 # JSONForms compatibility
 
-Flyer Studio depends on Xarthisius/girder-jsonforms from its **`igsn` branch**, declared
-directly in `setup.py`:
+Flyer Studio depends on **girder-jsonforms 2.1.1 or newer**, an ordinary PyPI release:
 
 ```
-girder-jsonforms @ git+https://github.com/Xarthisius/girder-jsonforms.git@igsn
+girder-jsonforms>=2.1.1
 ```
 
-The branch is required rather than preferred. Stack registration creates each stack as a
+2.1.1 is the floor rather than a preference. Stack registration creates each stack as a
 child deposition via `create_batch()`'s `relation_type`, `inverse_relation_type` and
-`child_titles` arguments, which have never been released to PyPI.
+`child_titles` arguments, and 2.1.1 is the first release that has them — the `igsn` branch
+that carried them was merged and released.
 
-Install it from a checkout with its frontend built, rather than letting pip resolve that
-reference — see [INSTALLATION.md](INSTALLATION.md). The package ships only prebuilt
-frontend assets, so a pip-from-git install has no `web_client/dist`, and JSONForms' own
-`registerPluginStaticContent` raises `FileNotFoundError` on `style.css` as soon as
-anything touches the server. Its CI builds the frontend for the same reason.
+**This used to be a git reference, and it needed a checkout with its frontend built by
+hand.** A pip-from-git install has no `web_client/dist`, so JSONForms'
+`registerPluginStaticContent` raised `FileNotFoundError` on `style.css` as soon as
+anything touched the server. The published wheel ships that directory, so none of that
+applies any more: no clone, no `npm run build`, no `--no-deps`.
 
 No patch is needed. There used to be one; every hunk is now either upstream or
 unnecessary:
 
 | Hunk | Status |
 |---|---|
-| `create_batch()` relationships and child titles | Upstreamed as [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34), merged into `igsn` on 2026-09-25 as `51500a3`, in a better form: keyword-only, validated, and tested. |
+| `create_batch()` relationships and child titles | Upstreamed as [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34), merged into `igsn` on 2026-09-25 as `51500a3`, in a better form: keyword-only, validated, and tested. Released in 2.1.1. |
 | Skip the AIMD portal task when `AIMD_PORTAL_TOKEN` is unset | Unnecessary in a deployment: every Girder install has a broker — core itself enqueues `deleteFolderTask.delay()` on `DELETE /folder/:id` — and the task returns early without a token, so the worst case is a queued no-op and a log line per registration. Tests have no broker, and use pytest_girder's `eagerWorkerTasks` fixture to run tasks inline, which is how girder core tests its own folder deletion. |
 | Skip AIMDL project propagation for non-AIMDL items | Replaced by configuration. See below. |
 
