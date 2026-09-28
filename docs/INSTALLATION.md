@@ -22,7 +22,7 @@ the moment anything touches the server:
 git clone -b igsn https://github.com/Xarthisius/girder-jsonforms.git ../girder-jsonforms
 (cd ../girder-jsonforms/girder_jsonforms/web_client && npm ci && npm run build)
 python -m pip install -e ../girder-jsonforms
-python -m pip install ./vendor/girder-dashboards
+python -m pip install "girder-dashboards==0.2.0"
 python -m pip install --no-deps .
 ```
 

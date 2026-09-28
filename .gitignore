@@ -4,7 +4,6 @@ __pycache__/
 # Root-anchored: a bare `build/` also matched girder_flycut/web_client/build/,
 # silently keeping the source generator out of version control.
 /build/
-vendor/girder-dashboards/build/
 dist/
 .pytest_cache/
 .venv/
@@ -15,12 +14,6 @@ node_modules/
 .env.*
 !.env.example
 local-backups/
-
-# Required prebuilt frontend for the bundled dashboards dependency.
-!vendor/girder-dashboards/girder_dashboards/web_client/dist/
-vendor/girder-dashboards/girder_dashboards/web_client/dist/*
-!vendor/girder-dashboards/girder_dashboards/web_client/dist/girder-plugin-dashboards.umd.cjs
-!vendor/girder-dashboards/girder_dashboards/web_client/dist/style.css
 
 # Coverage output
 .coverage

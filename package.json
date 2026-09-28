@@ -36,8 +36,7 @@
   "pugLintConfig": {
     "extends": "@girder/pug-lint-config",
     "excludeFiles": [
-      "**/node_modules/",
-      "**/vendor/"
+      "**/node_modules/"
     ]
   }
 }

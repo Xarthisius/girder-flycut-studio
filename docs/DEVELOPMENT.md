@@ -1,6 +1,6 @@
 # Development
 
-Follow the [README](../README.md) to install the vendored dashboards dependency and the pinned,
+Follow the [README](../README.md) to install the dashboards dependency and the pinned,
 patched JSONForms dependency into a Girder 5 environment. MongoDB is required.
 Use a separate database for tests; the runtime, database, and uploaded data are not
 part of this source repository.

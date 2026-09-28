@@ -124,13 +124,13 @@ jobs:
       # on a fully passing run. Editable makes them the same files.
       - name: Install the plugin and its dependencies
         run: |
-          python -m pip install ./vendor/girder-dashboards
+          python -m pip install "girder-dashboards==0.2.0"
           python -m pip install --no-deps -e .
           python -m pip install -r requirements-dev.txt
 
       # Both plugins md5-hash every file they register as static content, so
       # the bundles have to exist before any test uses the `server` fixture.
-      # The vendored girder-dashboards ships one prebuilt; ours is built here.
+      # girder-dashboards ships a prebuilt bundle in its wheel; ours is built here.
       - name: Build the browser bundle
         run: |
           npm ci
@@ -213,7 +213,7 @@ jobs:
 
       - name: Install the plugin and build its bundle
         run: |
-          python -m pip install ./vendor/girder-dashboards
+          python -m pip install "girder-dashboards==0.2.0"
           python -m pip install --no-deps -e .
           npm ci
           npm --prefix girder_flycut/web_client ci

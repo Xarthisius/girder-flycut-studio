@@ -1,5 +1,5 @@
 # girder-jsonforms is not on PyPI at the revision this plugin needs; the IGSN
 # child-deposition support it depends on lives on the `igsn` branch.
 girder-jsonforms @ git+https://github.com/Xarthisius/girder-jsonforms.git@igsn
-./vendor/girder-dashboards
+girder-dashboards==0.2.0
 .
