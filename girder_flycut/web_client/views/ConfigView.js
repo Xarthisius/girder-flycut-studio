@@ -3,17 +3,15 @@
  *
  * Decision 4: the policy screen is an administrator's page in Girder's own
  * plugin config area, not a hidden button inside a dashboard that operators
- * use. This view is only the frame -- the breadcrumb, a wrapper and a status
- * line. AdminSettingsView is the screen, unchanged, which is why 4d made it a
- * view in the first place.
+ * use. This view is only the frame -- the breadcrumb and a container.
+ * AdminSettingsView is the screen, which is why 4d made it a view.
  *
- * The wrapper keeps `.g-flycut-dashboard`. That class is not decoration: the
- * whole stylesheet is scoped under it (Decision 1 dropped the shadow root), so
- * without it the screen renders unstyled.
+ * Nothing here carries `.g-flycut-dashboard`, and neither view imports a
+ * stylesheet. The dashboard's look belongs to the dashboard; a plugin config
+ * page should look like every other one in the admin console, which means
+ * Girder's own Bootstrap classes and no CSS of ours.
  */
 import configViewTemplate from '../templates/configView.pug';
-import '../stylesheets/dashboard.styl';
-import '../stylesheets/configView.styl';
 import AdminSettingsView from './AdminSettingsView.js';
 
 const View = girder.views.View;
@@ -24,18 +22,17 @@ const ConfigView = View.extend({
         this.busy = false;
         this.settingsView = new AdminSettingsView({
             parentView: this,
-            // The shell's guard greys out topbar controls this page has not
-            // got, so this is the same contract with only the parts that apply:
-            // one request at a time, and errors said out loud rather than
-            // swallowed.
+            // The dashboard shell's guard greys out topbar controls this page
+            // has not got, so this is the same contract with only the parts
+            // that apply: one request at a time, and errors said out loud
+            // rather than swallowed.
             guard: (fn) => async () => {
                 if (this.busy) return;
                 this.busy = true;
                 try {
                     await fn();
-                    this.$('#configStatus').text('');
                 } catch (error) {
-                    this.$('#configStatus').text(error.message);
+                    this.settingsView.$('#settingsStatus').text(error.message);
                 } finally {
                     this.busy = false;
                 }
@@ -54,9 +51,6 @@ const ConfigView = View.extend({
             parentView: this
         }).render();
         this.$('.g-flycut-config').append(this.settingsView.render().el);
-        // AdminSettingsView starts hidden because the shell shows one screen at
-        // a time. Here it is the only one.
-        this.settingsView.$el.removeClass('hidden');
         this.settingsView.open();
         return this;
     }

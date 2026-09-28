@@ -6,13 +6,13 @@
  * landed. Being a view already is what made that promotion a route and a
  * parent rather than a rewrite.
  *
- * Its el is the screen itself: the template holds the section's contents and
- * tagName/id/className supply the wrapper, so nothing nests. It still starts
- * `hidden`, which ConfigView clears, because it is the only screen there.
+ * It renders in Girder's own plugin-config idiom -- Bootstrap form groups
+ * and buttons, no stylesheet of this plugin's own -- because it is an
+ * administrator's page in the admin console, not a dashboard screen. That is
+ * also why it no longer starts hidden: nothing swaps it with anything.
  */
 import adminSettingsTemplate from '../templates/adminSettings.pug';
 import { escapeHtml, request } from '../util.js';
-import '../stylesheets/adminSettings.styl';
 
 const View = girder.views.View;
 const ROLES = ['creators', 'owners', 'editors', 'viewers'];
@@ -23,7 +23,6 @@ const POLICY_BOOLEANS = [
 
 const AdminSettingsView = View.extend({
     events: {
-        'click #adminSettingsBack': function () { this.trigger('g:close'); },
         // Typing a path by hand means the browsed folder id no longer describes
         // it, so the server resolves the path instead.
         'input #workspacePath': function () {
@@ -55,9 +54,9 @@ const AdminSettingsView = View.extend({
         this.principals = [];
     },
 
-    tagName: 'section',
+    tagName: 'div',
     id: 'adminSettingsScreen',
-    className: 'workflow-home settings-screen hidden',
+    className: 'g-flycut-settings',
 
     render: function () {
         this.$el.html(adminSettingsTemplate());
@@ -93,10 +92,12 @@ const AdminSettingsView = View.extend({
     renderPolicyLists: function () {
         this.$('#policyLists').html(ROLES.map((role) => {
             const entries = this.policy[role].map((ref, index) =>
-                `<li>${escapeHtml(ref.label || ref.id)} (${ref.type}) ` +
-                `<button type="button" class="button ghost" data-role="${role}" ` +
-                `data-index="${index}">Remove</button></li>`).join('') || '<li>None</li>';
-            return `<h3>${role[0].toUpperCase() + role.slice(1)}</h3><ul>${entries}</ul>`;
+                `<li class="list-group-item">${escapeHtml(ref.label || ref.id)} (${ref.type}) ` +
+                `<button type="button" class="btn btn-xs btn-default" data-role="${role}" ` +
+                `data-index="${index}">Remove</button></li>`).join('') ||
+                '<li class="list-group-item">None</li>';
+            return `<h5>${role[0].toUpperCase() + role.slice(1)}</h5>` +
+                `<ul class="list-group">${entries}</ul>`;
         }).join(''));
     },
 
