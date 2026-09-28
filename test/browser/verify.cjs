@@ -253,36 +253,56 @@ async function reopen(page, base, id) {
         ]) {
             check(`workflow home offers ${label}`, await visible(page, id));
         }
-        check('admin settings stay hidden (G1)', !(await visible(page, '#adminSettingsBtn')));
+        check('the dashboard no longer carries an admin button (G1)',
+            await page.locator('#adminSettingsBtn').count() === 0);
         await page.screenshot({ path: `${SHOTS}/02-workflow-home.png` });
 
-        // ---- the admin screen -------------------------------------------
-        // Dead UI: the button above is hidden unconditionally, so nothing had
-        // ever rendered this screen. It is a view of its own now, and Decision 4
-        // promotes it to #plugins/flycut/config in Phase 6 -- these checks are
-        // what keep it working across the phases in between. Un-hiding the
-        // button is the only thing the harness does that a user cannot.
-        check('the admin screen is its own section',
-            await page.locator('section#adminSettingsScreen.settings-screen').count() === 1);
-        await page.evaluate(
-            () => document.querySelector('#adminSettingsBtn').classList.remove('hidden'));
-        await page.click('#adminSettingsBtn');
-        await page.waitForSelector('#adminSettingsScreen:not(.hidden)', { timeout: 20000 });
-        check('opening the admin screen loads the policy',
+        // ---- the plugin config page -------------------------------------
+        // C6/G1: the policy screen is an administrator's page at a Girder route
+        // now, not a hidden button inside an operator's dashboard. These checks
+        // used to un-hide that button -- the one thing the harness did that a
+        // user could not -- and drive the route instead, which is the whole
+        // point of the promotion.
+        await page.goto(`${BASE}/#plugins`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.g-plugin-list-item[data-name="flycut"]', { timeout: 20000 });
+        // Girder's plugin list addresses its own links by a `g-route` attribute
+        // rather than an href, so this is the gear an administrator clicks.
+        check('the gear link to the config page is offered on #plugins',
+            await page.locator(
+                '.g-plugin-list-item[data-name="flycut"] a.g-plugin-config-link[g-route="plugins/flycut/config"]'
+            ).count() === 1);
+
+        await page.goto(`${BASE}/#plugins/flycut/config`, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#adminSettingsScreen', { timeout: 20000 });
+        check('the config page renders the policy screen',
+            await page.locator('.g-flycut-config #adminSettingsScreen').count() === 1);
+        // The page is in the admin console, not the dashboard. Carrying the
+        // dashboard's scoping class would pull its whole stylesheet in and make
+        // a plugin config page look like nothing else in Girder.
+        check('the config page does not dress itself as the dashboard',
+            await page.locator('.g-flycut-dashboard').count() === 0);
+        // Native Girder styling rather than this plugin's: the form controls and
+        // the save button are Bootstrap, which is what every other config page uses.
+        check('the form uses Girder\'s own control classes',
+            await page.locator('#workspacePath.form-control').count() === 1 &&
+            await page.locator('#saveAdminSettingsBtn.btn.btn-primary').count() === 1);
+        check('the page shows its plugin breadcrumb',
+            await page.locator('.g-config-breadcrumb-container').count() === 1);
+        check('opening the config page loads the policy',
             (await page.inputValue('#workspacePath')).length > 0,
             await page.inputValue('#workspacePath'));
         check('collections are populated',
             await page.locator('#workspaceCollection option').count() > 0);
         check('the four principal roles render',
-            await page.locator('#policyLists h3').count() === 4,
-            (await page.locator('#policyLists h3').allTextContents()).join(', '));
+            await page.locator('#policyLists h5').count() === 4,
+            (await page.locator('#policyLists h5').allTextContents()).join(', '));
         check('principals are searched on open',
             await page.locator('#principalResults option').count() > 0);
 
         // Add a principal, see it listed under its role, then take it back out.
         // The lists are re-rendered from the policy each time, so this is the
         // check that the policy and the markup stay in step.
-        const viewers = () => page.locator('#policyLists h3:text-is("Viewers") + ul').innerText();
+        const viewers = () => page.locator('#policyLists h5:text-is("Viewers") + ul').innerText();
         const emptyRole = (await viewers()).trim();
         check('an empty role reads None', emptyRole === 'None', emptyRole);
         const principal =
@@ -311,12 +331,11 @@ async function reopen(page, base, id) {
             (await textOf(page, '#settingsStatus')).startsWith('Settings saved'),
             await textOf(page, '#settingsStatus'));
         await page.screenshot({ path: `${SHOTS}/02b-admin-settings.png` });
-        await page.click('#adminSettingsBack');
-        await page.waitForSelector('#workflowHome:not(.hidden)', { timeout: 20000 });
-        check('Back leaves the admin screen for the workflow home',
+        // The config page is outside the dashboard, so getting back to the
+        // workflow is navigation rather than a Back button.
+        await reopen(page, BASE, flycut._id);
+        check('the dashboard is reachable again from the config page',
             await visible(page, '#configurationStepBtn'));
-        await page.evaluate(
-            () => document.querySelector('#adminSettingsBtn').classList.add('hidden'));
 
         // ---- configuration picker ---------------------------------------
         await page.click('#configurationStepBtn');

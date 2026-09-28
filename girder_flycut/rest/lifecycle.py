@@ -18,6 +18,7 @@ from girder.models.file import File
 from girder.models.folder import Folder
 from girder.models.item import Item
 from girder.models.upload import Upload
+from girder_jsonforms.models.deposition import Deposition
 from pymongo.errors import DuplicateKeyError
 
 from .. import settings as studio_settings
@@ -180,12 +181,6 @@ class LifecycleRoutes:
             raise RestException("Generate files before registering.")
         if state.get("registration"):
             return FlycutConfig().filter(item, user)
-        try:
-            # Deferred deliberately: this is the 503 path, not a lazy import.
-            # See the note in materials.py.
-            from girder_jsonforms.models.deposition import Deposition
-        except ImportError as exc:
-            raise RestException("Install and enable girder-jsonforms from its igsn branch.", code=503) from exc
         if not all(File().findOne({"_id": ObjectId(file["_id"])}) for file in state["files"]):
             raise RestException(
                 "Some generated files are missing. Delete the remaining files and regenerate.", code=409

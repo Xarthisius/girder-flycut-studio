@@ -2,32 +2,18 @@
 
 Use an environment with Python 3.10+ and MongoDB. From this folder:
 
-`setup.py` depends on girder-jsonforms directly from its **`igsn` branch**:
-
-```
-girder-jsonforms @ git+https://github.com/Xarthisius/girder-jsonforms.git@igsn
-```
-
-That branch is required, not a preference: Flyer Studio registers each stack as a child
-deposition using `create_batch()`'s `relation_type`, `inverse_relation_type` and
-`child_titles` arguments, which have never been released to PyPI.
-
-**Install it from a checkout, not by letting pip resolve that reference.** The package
-ships only prebuilt frontend assets, which a git checkout does not carry, so a
-pip-from-git install has no `web_client/dist` — and `load()` raises `FileNotFoundError`
-the moment anything touches the server:
-
 ```sh
-# In a directory alongside this repository:
-git clone -b igsn https://github.com/Xarthisius/girder-jsonforms.git ../girder-jsonforms
-(cd ../girder-jsonforms/girder_jsonforms/web_client && npm ci && npm run build)
-python -m pip install -e ../girder-jsonforms
-python -m pip install ./vendor/girder-dashboards
-python -m pip install --no-deps .
+python -m pip install .
 ```
 
-`--no-deps` on the last line is load-bearing: without it pip re-resolves the git reference
-from `setup.py` and replaces the built checkout with an unbuilt one.
+Both dependencies come from PyPI and pip resolves them: girder-dashboards and
+girder-jsonforms **2.1.1 or newer**. 2.1.1 is the first release carrying `create_batch()`'s
+`relation_type`, `inverse_relation_type` and `child_titles` arguments, which Flyer Studio
+needs to register each stack as a child deposition.
+
+Nothing has to be cloned or built by hand. Both wheels ship a prebuilt `web_client/dist`,
+which matters because each plugin's `load()` md5-hashes every file it registers as static
+content and raises `FileNotFoundError` without one.
 
 ### Configure `jsonforms.projects_enabled`
 

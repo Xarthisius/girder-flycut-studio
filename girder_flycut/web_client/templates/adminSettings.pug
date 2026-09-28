@@ -1,54 +1,59 @@
-//- The policy screen. Six checkboxes with the same shape, and the roles they
-//- describe are the four the server stores.
+//- The policy screen, in Girder's own plugin-config idiom: Bootstrap form
+//- groups and buttons, no stylesheet of this plugin's own. It renders outside
+//- the dashboard, so it should not look like it.
 
 mixin policyToggle(id, label)
-  label.field.checkbox-field
-    input(id=id, type='checkbox')
-    | #{label}
+  .checkbox
+    label
+      input(id=id, type='checkbox')
+      | &nbsp;#{label}
 
-button#adminSettingsBack.button.ghost(type='button') ← Back to workflow
-h1 Flyer Studio settings
-p Settings apply to new configurations and IGSNs. Existing files keep their location and permissions.
+.g-flycut-settings-description
+  p Settings apply to new configurations and IGSNs. Existing files keep their location and permissions.
 
-h2 Shared workspace
-label.field
-  | Collection
-  select#workspaceCollection
-button#browseWorkspaceBtn.button.ghost(type='button') Choose workspace folder
-label.field
-  | Workspace path
-  input#workspacePath(placeholder='/collection/Flyer Studio/Workspace')
-p.field-note Choose a folder inside a collection. Collaborators also need access to that destination; the settings below do not change the collection’s permissions.
+h4 Shared workspace
+.form-group
+  label(for='workspaceCollection') Collection
+  select#workspaceCollection.form-control
+.form-group
+  button#browseWorkspaceBtn.btn.btn-sm.btn-default(type='button') Choose workspace folder
+.form-group
+  label(for='workspacePath') Workspace path
+  input#workspacePath.form-control(placeholder='/collection/Flyer Studio/Workspace')
+  p.help-block Choose a folder inside a collection. Collaborators also need access to that destination; the settings below do not change the collection’s permissions.
 
-h2 Users and groups
-label.field
-  | Find a user or group
-  input#principalSearch(placeholder='Search by name')
-button#findPrincipalsBtn.button.ghost(type='button') Search
-label.field
-  | Results
-  select#principalResults
-label.field
-  | Add to
-  select#principalRole
+h4 Users and groups
+.form-group
+  label(for='principalSearch') Find a user or group
+  input#principalSearch.form-control(placeholder='Search by name')
+.form-group
+  button#findPrincipalsBtn.btn.btn-sm.btn-default(type='button') Search
+.form-group
+  label(for='principalResults') Results
+  select#principalResults.form-control
+.form-group
+  label(for='principalRole') Add to
+  select#principalRole.form-control
     option(value='creators') IGSN creators
     option(value='owners') Owners
     option(value='editors') Editors
     option(value='viewers') Viewers
-button#addPrincipalBtn.button.ghost(type='button') Add user or group
+.form-group
+  button#addPrincipalBtn.btn.btn-sm.btn-default(type='button') Add user or group
 #policyLists
-p.field-note Creators are attribution only. Groups appear as organizational creators. Owners can manage access; editors can modify data; viewers can read. The highest matching access level wins.
+p.help-block Creators are attribution only. Groups appear as organizational creators. Owners can manage access; editors can modify data; viewers can read. The highest matching access level wins.
 
-h2 Acting user
+h4 Acting user
 +policyToggle('creators_include_user', 'Include the registrant as an IGSN creator')
 +policyToggle('owners_include_user', 'Include the acting user as an owner')
 +policyToggle('editors_include_user', 'Include the acting user as an editor')
 +policyToggle('viewers_include_user', 'Include the acting user as a viewer')
 
-h2 Visibility
+h4 Visibility
 +policyToggle('public_igsn', 'Make new stack IGSNs public')
 +policyToggle('public_files', 'Make new configuration folders and files public')
-p.field-note IGSN access uses the same owners, editors, and viewers. Parent foil permissions remain unchanged.
+p.help-block IGSN access uses the same owners, editors, and viewers. Parent foil permissions remain unchanged.
 
-button#saveAdminSettingsBtn.button.primary(type='button') Save settings
-p#settingsStatus(role='status')
+.form-group
+  button#saveAdminSettingsBtn.btn.btn-sm.btn-primary(type='button') Save settings
+  p#settingsStatus.help-block(role='status')

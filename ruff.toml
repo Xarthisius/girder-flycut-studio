@@ -17,7 +17,6 @@ exclude = [
     "dist",
     "node_modules",
     "site-packages",
-    "vendor",
     "venv",
 ]
 

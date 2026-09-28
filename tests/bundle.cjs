@@ -39,12 +39,23 @@ Model.extend = extend;
 function Collection() {}
 Collection.extend = extend;
 
+// routes.js registers at evaluation, so the stub has to carry what it reaches
+// for. What it records is then assertable: a route nobody registers is a
+// config page nobody can open.
+const routes = [];
+const exposed = [];
+function PluginConfigBreadcrumbWidget() {}
+PluginConfigBreadcrumbWidget.prototype.render = function () { return this; };
+
 const girder = {
     Backbone: { Model, Collection },
     $: () => ({ one: () => {} }),
-    views: { View },
+    views: { View, widgets: { PluginConfigBreadcrumbWidget } },
     rest: { restRequest: () => Promise.reject(new Error('not called at load')) },
     auth: { getCurrentUser: () => null },
+    router: { route: (path, name, handler) => routes.push([path, name, handler]) },
+    events: { trigger: () => {} },
+    utilities: { PluginUtils: { exposePluginConfig: (name, path) => exposed.push([name, path]) } },
     plugins: { dashboards: { registerDashboard: (key, spec) => registered.push([key, spec]) } }
 };
 
@@ -70,11 +81,15 @@ assert.equal(extendedSpec.start.constructor.name, 'AsyncFunction',
     'start awaits the catalog and the configurations, so it has to stay async');
 console.log('View defines render, start and destroy.');
 
-// The screens are views of their own, each with an events hash and an id that
-// showScreen() addresses it by. A screen that lost its id would be invisible to
-// navigation and nothing else would notice.
-const SCREEN_IDS = ['workflowHome', 'configurationPicker', 'lightburnPicker',
-    'registrationPicker', 'adminSettingsScreen', 'builderScreen'];
+// The screens are views of their own, each with an events hash and an id.
+// Five are the shell's, addressed by showScreen(); a screen that lost its id
+// would be invisible to navigation and nothing else would notice.
+// adminSettingsScreen is no longer among them -- since 6b it is the plugin
+// config page's only screen, mounted by ConfigView -- but it is still a view
+// with an id, and still has to be in the bundle.
+const SHELL_SCREEN_IDS = ['workflowHome', 'configurationPicker', 'lightburnPicker',
+    'registrationPicker', 'builderScreen'];
+const SCREEN_IDS = [...SHELL_SCREEN_IDS, 'adminSettingsScreen'];
 const screens = specs.filter((spec) => SCREEN_IDS.includes(spec.id));
 assert.equal(screens.length, SCREEN_IDS.length,
     `expected a view per screen, found ${screens.map((s) => s.id)}`);
@@ -83,6 +98,18 @@ for (const screen of screens) {
     assert(Object.keys(screen.events).length, `${screen.id} has an empty events hash`);
 }
 console.log(`Each of the ${screens.length} screens is a view with an events hash.`);
+
+// C6: the policy screen is reachable at a Girder route rather than by
+// un-hiding a button. Both halves matter -- exposePluginConfig is the gear
+// link on #plugins, the route is where it goes -- and they have to agree.
+assert.deepEqual(exposed, [['flycut', 'plugins/flycut/config']],
+    `expected one exposed plugin config, got ${JSON.stringify(exposed)}`);
+const configRoute = routes.find(([path]) => path === 'plugins/flycut/config');
+assert(configRoute, `no route for the config page, got ${routes.map(([p]) => p)}`);
+assert.equal(typeof configRoute[2], 'function', 'the config route needs a handler');
+assert.equal(exposed[0][1], configRoute[0],
+    'the gear link and the route must point at the same path');
+console.log('The config page is exposed and routed at plugins/flycut/config.');
 
 // The builder's own children. Three form sections that render into
 // #configFields and three panels the tab strip switches between; the panels are

@@ -1,6 +1,6 @@
 # Development
 
-Follow the [README](../README.md) to install the vendored dashboards dependency and the pinned,
+Follow the [README](../README.md) to install the dashboards dependency and the pinned,
 patched JSONForms dependency into a Girder 5 environment. MongoDB is required.
 Use a separate database for tests; the runtime, database, and uploaded data are not
 part of this source repository.
@@ -124,8 +124,8 @@ Screenshots land in `test/browser/screenshots/` and are uploaded as a CI artefac
 
 `.github/workflows/build-test.yaml` runs three jobs. **check** is the fast gate: `ruff`,
 a bundle rebuild, a staleness diff against the committed bundle, `node --check`, and the
-three frontend suites. **pytest** provisions MongoDB and Redis, installs girder-jsonforms
-from its `igsn` branch with its frontend built, and runs the server suite with coverage.
+three frontend suites. **pytest** provisions MongoDB and Redis, installs the plugin
+and its two PyPI dependencies, and runs the server suite with coverage.
 **browser** does the same setup, starts Girder, seeds it and runs the harness above.
 
 There is deliberately no message broker in CI. Girder deployments always have one — core

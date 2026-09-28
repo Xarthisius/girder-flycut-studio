@@ -2,16 +2,12 @@
 
 from girder.constants import AccessType
 from girder.exceptions import RestException
+from girder_jsonforms.models.deposition import Deposition
 
 from .settings import policy
 
 
 def foil_materials(user):
-    # Deferred deliberately, not an oversight. girder-jsonforms is an unreleased git
-    # branch (see setup.py), and register_config() degrades to a 503 when it is absent.
-    # Importing it at module scope here would make rest.py fail to import instead,
-    # taking the whole plugin down. Hoist both or neither.
-    from girder_jsonforms.models.deposition import Deposition
 
     model = Deposition()
     # JSONForms represents local_id as a DataCite Local alternateIdentifier.

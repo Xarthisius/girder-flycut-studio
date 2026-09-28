@@ -2,6 +2,10 @@
   "name": "@girder/girder-plugin-flycut",
   "version": "1.0.0",
   "description": "Flyer Studio dashboard for Girder",
+  "author": "Max Berner <bernermaximus@gmail.com> (https://github.com/mxberner)",
+  "contributors": [
+    "Kacper Kowalik <xarthisius.kk@gmail.com> (https://github.com/Xarthisius)"
+  ],
   "license": "BSD-3-Clause",
   "type": "module",
   "files": [

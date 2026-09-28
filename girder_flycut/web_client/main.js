@@ -1,8 +1,9 @@
 /**
  * Flyer Studio dashboard shell.
  *
- * Every screen is a view now: four workflow screens over a WorkflowModel, the
- * admin policy screen, and the builder over a BuilderModel and two collections.
+ * Every screen is a view now: four workflow screens over a WorkflowModel and
+ * the builder over a BuilderModel and two collections. The policy screen is no
+ * longer one of them -- it is Girder's plugin config page, see routes.js.
  * What is left here is the chrome they sit in -- which screen is showing, the
  * status line, the busy guard -- and the lifecycle that moves a configuration
  * between them, which is the one thing that is genuinely nobody's screen.
@@ -25,8 +26,8 @@ import './stylesheets/topbar.styl';
 import statusBarTemplate from './templates/statusBar.pug';
 import topbarTemplate from './templates/topbar.pug';
 import { ask, escapeHtml, request } from './util.js';
-import AdminSettingsView from './views/AdminSettingsView.js';
 import ConfigBuilderView from './views/ConfigBuilderView.js';
+import './routes.js';
 import ConfigurationPickerView from './views/ConfigurationPickerView.js';
 import GenerationPickerView from './views/GenerationPickerView.js';
 import RegistrationPickerView from './views/RegistrationPickerView.js';
@@ -36,14 +37,13 @@ const View = girder.views.View;
 /** Every screen, which is what showScreen() hides all but one of. */
 const SCREEN_IDS = [
     'workflowHome', 'configurationPicker', 'lightburnPicker', 'registrationPicker',
-    'builderScreen', 'adminSettingsScreen'
+    'builderScreen'
 ];
 const PAGE_LABELS = {
     workflowHome: 'Home',
     configurationPicker: 'Configuration',
     lightburnPicker: 'Generation',
-    registrationPicker: 'Registration',
-    adminSettingsScreen: 'Settings'
+    registrationPicker: 'Registration'
 };
 
 const Dashboard = View.extend({
@@ -61,8 +61,8 @@ const Dashboard = View.extend({
         const mount = document.createElement('div');
         mount.className = 'g-flycut-dashboard';
         // The screens are inserted between these, so the document order stays
-        // topbar, the four workflow screens, the status line, the admin screen,
-        // the builder -- the order the one markup file used to have.
+        // topbar, the four workflow screens, the status line, the builder --
+        // the order the one markup file used to have.
         mount.innerHTML = topbarTemplate() + statusBarTemplate();
         this.el.append(mount);
         this.ready = this.start(mount, currentUser)
@@ -141,13 +141,9 @@ const Dashboard = View.extend({
         const configPickerView = new ConfigurationPickerView(screenOptions);
         const generationView = new GenerationPickerView(screenOptions);
         const registrationView = new RegistrationPickerView(screenOptions);
-        const adminSettingsView = new AdminSettingsView({
-            parentView: this, guard, onSaved: refresh
-        });
         for (const view of [homeView, configPickerView, generationView, registrationView]) {
             mount.insertBefore(view.render().el, $('#runStatus'));
         }
-        mount.insertBefore(adminSettingsView.render().el, builder.el);
 
         const configure = async (automated) => {
             workflow.set('completeWorkflow', automated);
@@ -161,9 +157,7 @@ const Dashboard = View.extend({
         this.listenTo(homeView, 'g:configure', (automated) => guard(() => configure(automated))());
         this.listenTo(homeView, 'g:generation', guard(async () => { await refresh(); showScreen('lightburnPicker'); }));
         this.listenTo(homeView, 'g:registration', guard(async () => { await refresh(); showScreen('registrationPicker'); }));
-        this.listenTo(homeView, 'g:admin', () => adminSettingsView.open());
-        this.listenTo(adminSettingsView, 'g:open', () => showScreen('adminSettingsScreen'));
-        for (const view of [configPickerView, generationView, registrationView, adminSettingsView]) {
+        for (const view of [configPickerView, generationView, registrationView]) {
             this.listenTo(view, 'g:home g:close', home);
         }
         this.listenTo(configPickerView, 'g:selected', () => status(''));
