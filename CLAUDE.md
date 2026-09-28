@@ -32,40 +32,35 @@ Work happens on `conversion`, one branch per phase, each merged by PR:
 | #7 | — | Browser end-to-end harness (`D2`), pulled forward before 4c |
 | #8 | 4c | `girder.dialog.confirm` (`C5`); laser rules to `core/laser.js` |
 | #9 | 4d | The five screens became views over a `WorkflowModel` (`D1`, most of `C1`) |
+| #10 | 4e | `builder.js` became six views over a model and two collections (`C1`, `C4`) |
 
-**In flight:** `phase-4e-builder`, three commits, not yet a PR. `builder.js` is gone;
-`C1` and `C4` are closed. Phase 4 has only `C2`/`C3` left.
+**In flight:** `phase-4f-pug-stylus`, three commits, not yet a PR. Pug and Stylus
+(`C2`, `C3`), and the client became its own npm project. **Phase 4 is complete** — 25 of
+33 closed.
 
 ### Where to pick up
 
-`C2` and `C3` — Pug and Stylus — and they are the mechanical half of Phase 4.
+**Phase 5, server-side alignment.** Nothing on the client is outstanding.
 
-The markup is already one `.html` per view, so `C2` is a per-fragment translation with no
-restructuring left in it. Copy the 14-line `pugPlugin()` from
-`vendor/girder-dashboards/.../vite.config.ts` verbatim; the laser card and the custom-field
-row are the two natural mixins, and they are template literals in
-`views/LaserListView.js` and `views/CustomFieldsView.js` rather than in a template file.
+- **`FlycutConfig` model** registered with `ModelImporter.registerModel`, owning
+  `validate()`, lifecycle and workspace containment — the logic now spread across `gate`,
+  `config_item`, `in_workspace`, `lifecycle` and `serialize`. *(`E4`)*
+- **`StackLock` model** formalising the Phase 0 TTL fix behind the model layer. *(`E2`)*
+- **Split `rest.py`** — 515 lines, 18 routes — into `rest/config.py`, `rest/template.py`,
+  `rest/settings.py`; replace the 14 `self.gate()` calls with one decorator and use
+  `modelParam` where a document is loaded by id. *(`E6`)*
+- **Hoist every function-local import**, removing the three redundant `ObjectId`
+  re-imports. *(`E5`)*
+- **`ruff format` plus `I`, at 120 columns** — Decision 5. 18 files change. *(`B4`)*
 
-`C3` is the bigger half: `styles/dashboard.css` is one 1,526-line file and wants splitting
-the same way, one `.styl` per view with tokens in `variables.styl`, imported for side
-effect from each view module. `tests/bundle.cjs` already fails if any rule escapes
-`.g-flycut-dashboard`, so the scoping is checked as the split happens.
+`pytest tests` is 42 tests at 87% coverage and is the safety net for all of it; run it
+after each step rather than at the end.
 
-Then `pug-lint` and `stylelint` join `npm run lint` and CI, matching girder core's
-`eslint . && pug-lint . && stylelint **/*.styl` with `@girder/pug-lint-config` and
-`stylelint-stylus/standard`.
-
-Also due in 4f, and small: `vite.config.ts` and `package.json` sit at the repository root
-because two source trees once shared one npm project. `config_builder/` is gone;
-conventions §3 puts both inside `web_client/`. Five places still describe the old build —
-`vite.config.ts:10`, `ruff.toml`, two comments in `.github/workflows/build-test.yaml`,
-`docs/CONFIGURATION_FORM_VALIDATION.md` and `docs/DEVELOPMENT.md`.
-
-The conventions the views settled on, worth following rather than reinventing:
+The conventions the client settled on, in case Phase 6 adds to it:
 
 - **Rules to `core/`, writing to the view.** A screen's state pass is one `applyState()`
   loop over a description from `core/workflow.js`; the builder's `refresh()` is the same
-  idea for the three viewer panels.
+  idea for its three viewer panels.
 - **A view's `el` is the thing.** The template holds the contents and
   `tagName`/`id`/`className` supply the wrapper, so nothing nests and `showScreen()` still
   finds a screen by id.
@@ -75,6 +70,8 @@ The conventions the views settled on, worth following rather than reinventing:
 - **Collections keep their rules in `core/`.** `apply()` hands a transform a copy of the
   list and resets to what comes back, which is what keeps `core/laser.js` testable without
   Backbone.
+- **A stylesheet does not know what loads before it.** Where a modifier has to beat its
+  base class, write both classes rather than relying on file order.
 
 ## Commands
 
@@ -162,8 +159,10 @@ girder_flycut/
     models/              WorkflowModel, BuilderModel, LaserModel, CustomFieldModel
     collections/         LaserCollection, CustomFieldCollection
     views/               ScreenView + five screens + ConfigBuilderView and its six children
-    templates/           one .html per view, imported as strings  (C2 makes them Pug)
-    styles/              dashboard.css, imported for its side effect -> dist/style.css
+    templates/           one .pug per view, plus pickerScreen/formSection mixins
+    stylesheets/         one .styl per view, plus variables.styl
+    package.json         the client's own build; the root one lints and tests
+    vite.config.ts       the lib build, with the Pug plugin
     dist/                built, gitignored, shipped in the wheel
 tests/                   pytest (42) + core.mjs, status.mjs, workflow.cjs,
                          complete_workflow.cjs, bundle.cjs
@@ -209,6 +208,12 @@ anything touching the UI.
 - **`prop('disabled', true)` on a `<fieldset>` sets the property, not the attribute.** It
   still disables the descendants per spec, so assert on a control inside it rather than on
   the fieldset.
+- **pug-lint reads `pugLintConfig` from `package.json`, not `pug-lint`.** With the wrong
+  key it exits 0 on anything. Check a deliberately broken file before believing it.
+- **Stylus evaluates the right-hand side.** Custom properties, `min()`, `max()`, `clamp()`
+  and `color-mix()` all have to go through `unquote()` — the first is opaque data, the
+  next three collide with Stylus functions of the same name, and the last it does not
+  know.
 - **`page.goto` to the URL you are already on does nothing.** All six screens live inside
   the one `#dashboard/:id` route, so the harness has a `reopen()` helper that goes via
   `#dashboards` first.

@@ -1,0 +1,53 @@
+.g-flycut-dashboard
+  .viewer-toolbar
+    height 48px
+    border-bottom 1px solid var(--line)
+    padding 0 18px
+    display flex
+    align-items center
+    justify-content space-between
+    color var(--muted)
+    font 500 11px ui-monospace,monospace
+
+  .viewer-toolbar button
+    border 0
+    background none
+    color var(--green)
+    font-weight 700
+    cursor pointer
+
+  pre
+    margin 0
+    padding 25px
+    white-space pre-wrap
+    overflow auto
+    color #30443e
+    font 12px/1.68 ui-monospace,SFMono-Regular,Menlo,monospace
+    max-height calc(100vh - 230px)
+
+  #jsonPanel
+    min-height 0
+    border 1px solid #bccbc3
+    border-radius 12px
+    background #fff
+    overflow hidden
+    box-shadow 0 3px 14px rgba(20,36,30,0.05)
+
+  #jsonPanel .viewer-toolbar
+    background #f1f5f2
+    flex-shrink 0
+
+  #jsonOutput
+    margin 12px
+    max-height unquote('min(60vh,640px)')
+    padding 16px 18px 28px
+    border 1px solid #e0e7e3
+    border-radius 7px
+    background #fafcfb
+    overflow auto
+    scrollbar-gutter stable
+    overflow-wrap anywhere
+
+  #jsonOutput:focus-visible
+    outline 2px solid var(--green)
+    outline-offset 2px

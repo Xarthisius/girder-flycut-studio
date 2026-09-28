@@ -8,8 +8,10 @@
  * A preset may require particular fields. Those rows cannot be renamed or
  * removed, which is the only thing that makes this more than a list.
  */
-import customFieldsTemplate from '../templates/customFields.html?raw';
+import customFieldRowTemplate from '../templates/customFieldRow.pug';
+import customFieldsTemplate from '../templates/customFields.pug';
 import { escapeHtml } from '../util.js';
+import '../stylesheets/customFields.styl';
 
 const View = girder.views.View;
 /** More than a few suggestions stops being a suggestion. */
@@ -54,14 +56,12 @@ const CustomFieldsView = View.extend({
 
     render: function () {
         if (!this.$el.children().length) {
-            this.$el.html(customFieldsTemplate);
+            this.$el.html(customFieldsTemplate());
         }
         const required = this.model.presetFieldNames();
-        this.$('#customList').html(this.collection.map((row) => {
-            const fixed = required.includes(row.get('name'));
-            return `
-        <div class="custom-row" data-id="${row.id}"><label>Field name<input data-key="name" ${fixed ? 'readonly' : ''} list="customFieldNames" autocomplete="off" value="${escapeHtml(row.get('name'))}" placeholder="e.g. batch_code"></label><label>Value<input data-key="value" value="${escapeHtml(row.get('value'))}" placeholder="Enter a value"></label><button class="remove-btn remove-custom ${fixed ? 'hidden' : ''}" type="button" aria-label="Remove custom field">×</button></div>`;
-        }).join(''));
+        this.$('#customList').html(this.collection.map((row) => customFieldRowTemplate({
+            row: row.toJSON(), fixed: required.includes(row.get('name'))
+        })).join(''));
         const count = this.collection.length;
         this.$('#customCount').text(`${count} field${count === 1 ? '' : 's'}`);
         this.$('#customFieldNames').html(this.model.get('knownFieldNames')

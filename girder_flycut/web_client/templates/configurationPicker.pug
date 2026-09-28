@@ -1,0 +1,12 @@
+include pickerScreen
+
++pickerBack('configPickerBackBtn')
+h1#configurationPickerTitle Configuration
+p#completeWorkflowHint.workflow-intro.hidden After submission, files are generated and the stack IGSN is registered automatically. Keep this page open until completion.
++pickerSelect('Saved configuration', 'savedConfigs', 'New configuration')
+//- Presets are not offered anywhere yet; G1 decides whether they ever are.
+label#presetPicker.field.saved-picker.hidden
+  | Preset
+  select#presetSelect(disabled)
+    option(value='') No preset
++pickerContinue('buildConfigBtn', 'Build config')

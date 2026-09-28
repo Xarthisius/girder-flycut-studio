@@ -4,7 +4,8 @@
  * Copying runs the export gate first: what lands on the clipboard is something
  * the server would have accepted, not a draft that happens to serialise.
  */
-import jsonPanelTemplate from '../templates/jsonPanel.html?raw';
+import jsonPanelTemplate from '../templates/jsonPanel.pug';
+import '../stylesheets/jsonPanel.styl';
 
 const View = girder.views.View;
 
@@ -28,7 +29,7 @@ const JsonPanelView = View.extend({
 
     render: function () {
         if (!this.$el.children().length) {
-            this.$el.html(jsonPanelTemplate);
+            this.$el.html(jsonPanelTemplate());
         }
         this.$('#jsonOutput').text(JSON.stringify(this.config(), null, 2));
         return this;

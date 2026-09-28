@@ -7,9 +7,9 @@
  * status line, the busy guard -- and the lifecycle that moves a configuration
  * between them, which is the one thing that is genuinely nobody's screen.
  *
- * The markup is one plain file per view. Two are still concatenated here: the
- * topbar and the status line have no view of their own, because neither is a
- * screen. The stylesheet is imported for its side effect: Vite emits it as
+ * The markup is one Pug template per view. Two are still rendered straight into
+ * the mount here: the topbar and the status line have no view of their own,
+ * because neither is a screen. The stylesheet is imported for its side effect: Vite emits it as
  * style.css and load() registers it, which is why it is scoped under
  * .g-flycut-dashboard rather than relying on a shadow root.
  */
@@ -20,9 +20,10 @@ import { runSubmission } from './core/submit.js';
 import { keepsActiveConfig } from './core/workflow.js';
 import BuilderModel from './models/BuilderModel.js';
 import WorkflowModel from './models/WorkflowModel.js';
-import './styles/dashboard.css';
-import statusBarTemplate from './templates/statusBar.html?raw';
-import topbarTemplate from './templates/topbar.html?raw';
+import './stylesheets/dashboard.styl';
+import './stylesheets/topbar.styl';
+import statusBarTemplate from './templates/statusBar.pug';
+import topbarTemplate from './templates/topbar.pug';
 import { ask, escapeHtml, request } from './util.js';
 import AdminSettingsView from './views/AdminSettingsView.js';
 import ConfigBuilderView from './views/ConfigBuilderView.js';
@@ -62,7 +63,7 @@ const Dashboard = View.extend({
         // The screens are inserted between these, so the document order stays
         // topbar, the four workflow screens, the status line, the admin screen,
         // the builder -- the order the one markup file used to have.
-        mount.innerHTML = topbarTemplate + statusBarTemplate;
+        mount.innerHTML = topbarTemplate() + statusBarTemplate();
         this.el.append(mount);
         this.ready = this.start(mount, currentUser)
             .catch((error) => { mount.textContent = error.message; });

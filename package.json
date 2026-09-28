@@ -1,20 +1,20 @@
 {
   "name": "girder-flycut-studio",
   "version": "1.0.0",
-  "description": "Linting for the Flyer Studio browser sources",
+  "description": "Repository-wide linting and tests for Flyer Studio",
   "private": true,
   "type": "module",
   "license": "BSD-3-Clause",
   "scripts": {
-    "build": "npm run check-version && vite build",
-    "dev": "vite build --watch",
-    "lint": "eslint .",
+    "build": "npm --prefix girder_flycut/web_client run build",
+    "dev": "npm --prefix girder_flycut/web_client run dev",
+    "lint": "eslint . && pug-lint girder_flycut && NODE_OPTIONS=--no-deprecation stylelint \"girder_flycut/**/*.styl\"",
     "format": "eslint --fix .",
-    "test": "node tests/core.mjs && node tests/status.mjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs",
-    "check-version": "node girder_flycut/web_client/build/check-version.mjs"
+    "test": "node tests/core.mjs && node tests/status.mjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs"
   },
   "devDependencies": {
     "@girder/eslint-config": "^3.2.17",
+    "@girder/pug-lint-config": "^3.2.17",
     "eslint": "^8.57.1",
     "eslint-config-semistandard": "^17.0.0",
     "eslint-config-standard": "^17.1.0",
@@ -22,6 +22,22 @@
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-n": "^15.7.0",
     "eslint-plugin-promise": "^6.6.0",
-    "vite": "^8.0.0"
+    "pug": "^3.0.4",
+    "pug-lint": "^2.7.0",
+    "stylelint": "^16.26.1",
+    "stylelint-stylus": "^1.0.0",
+    "stylus": "^0.64.0"
+  },
+  "stylelint": {
+    "extends": [
+      "stylelint-stylus/standard"
+    ]
+  },
+  "pugLintConfig": {
+    "extends": "@girder/pug-lint-config",
+    "excludeFiles": [
+      "**/node_modules/",
+      "**/vendor/"
+    ]
   }
 }

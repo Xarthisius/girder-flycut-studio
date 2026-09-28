@@ -9,43 +9,49 @@ Run the commands below from the repository root.
 
 ## Frontend
 
-Everything lives in `girder_flycut/web_client/` now: `builder.js` for the form,
-`main.js` for the workflow shell, `core/` for logic with no DOM in it,
-`templates/dashboard.html` for the markup, which `main.js` imports as a string, and
-`styles/dashboard.css`, which it imports for its side effect so Vite emits `style.css`.
-Then:
+Everything lives in `girder_flycut/web_client/`, which is its own npm project --
+girder's `build_plugins.py` looks for `web_client/package.json` and silently skips a
+plugin that has none:
 
-```sh
-npm ci          # once
-npm run lint
-npm run build   # generate sources, then bundle with Vite
-npm test        # the four .cjs suites, including tests/bundle.cjs
+```
+main.js          the shell: which screen shows, the status line, the busy guard
+core/            DOM-free logic, reachable without a document or a server
+models/          WorkflowModel, BuilderModel, and the two entry models
+collections/     LaserCollection, CustomFieldCollection
+views/           eleven views: five screens, the builder and its six children
+templates/       one .pug per view, plus the shared mixins
+stylesheets/     one .styl per view, plus variables.styl
+vite.config.ts   the lib build, with the Pug plugin
+package.json     the client's own build; the root one lints and tests
 ```
 
-`npm run build` checks that `setup.py` and `package.json` agree on a version, then
-bundles with Vite into `girder_flycut/web_client/dist/`, which is not committed. CI builds
-it and the wheel ships only `dist/girder-plugin-flycut.umd.cjs`.
+The repository root is a second npm project, holding the checks that span it:
+
+```sh
+npm ci                                  # once, at the root
+cd girder_flycut/web_client && npm ci   # once, for the build
+npm run lint    # eslint, then pug-lint, then stylelint
+npm run build   # delegates to the client project
+npm test        # the five suites, including tests/bundle.cjs
+```
+
+`npm run build` checks that `setup.py` and the client's `package.json` agree on a
+version, then bundles with Vite into `girder_flycut/web_client/dist/`, which is not
+committed. CI builds it and the wheel ships only `dist/`.
 
 Every rule in the stylesheet is scoped under `.g-flycut-dashboard`. There is no shadow
 root any more, so that class is the only thing keeping the dashboard's styles away from
-Girder core; `tests/bundle.cjs` fails the build if a rule escapes it.
+Girder core; `tests/bundle.cjs` fails the build if a rule escapes it. The Stylus files
+nest under that class rather than repeating it, which is why it appears once per file.
 
-There is no source generator any more. The markup and stylesheet were derived from
-`config_builder/static/` by matching literal strings until Phase 4a; that directory is
-deleted and the files are plain sources here.
-
-`girder_flycut/web_client/core/` is the DOM-free core: `assess.js`, `laser.js`,
-`records.js` and `validate.js` are reachable without a document, a server or the
-builder's closure, so `tests/status.mjs` imports them outright. Four slices remain in
-`tests/workflow.cjs` and `tests/complete_workflow.cjs`, all of them DOM orchestration
-over the shell's closure that Phase 4 turns into Backbone views.
+No test reads source as text. Everything a test needs is importable from `core/`, which
+is the point of that directory; issue D1 closed when the last slice went.
 
 `tests/bundle.cjs` loads the built UMD bundle against a stub `girder` global. Vite
 minifies the lib build, so it asserts runtime wiring and payload content rather than
 anything about identifiers.
 
-Formatting rules are switched off in `.eslintrc.json`; `.eslintrc.md` explains why and
-when they come back.
+`.eslintrc.md` records the one rule that is off permanently and why nothing else is.
 
 ## Backend tests and packaging
 

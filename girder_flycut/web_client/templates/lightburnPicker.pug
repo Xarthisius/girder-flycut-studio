@@ -1,0 +1,9 @@
+include pickerScreen
+
++pickerBack('lightburnPickerBackBtn')
+h1 Generation
++pickerSelect('Submitted configuration', 'submittedConfigs', 'Choose a submitted configuration')
+p#filesHint.field-note
++pickerLink('generatedFolderLink', 'View files ↗')
+button#deleteFilesBtn.button.ghost.hidden(type='button') Delete generated files
++pickerContinue('generateBtn', 'Generate files', true)

@@ -17,13 +17,14 @@ import { assessConfiguration } from '../core/assess.js';
 import { customFieldRows, importedLasers, layerAssignment, toFormShape } from '../core/config.js';
 import { exportDecision } from '../core/validate.js';
 import { request } from '../util.js';
-import builderScreenTemplate from '../templates/builderScreen.html?raw';
+import builderScreenTemplate from '../templates/builderScreen.pug';
 import CustomFieldsView from './CustomFieldsView.js';
 import JsonPanelView from './JsonPanelView.js';
 import LaserListView from './LaserListView.js';
 import PreviewView from './PreviewView.js';
 import RunParametersView from './RunParametersView.js';
 import StatusPanelView from './StatusPanelView.js';
+import '../stylesheets/builder.styl';
 
 const View = girder.views.View;
 /** How long a toast stays up. Long enough to read, short enough not to nag. */
@@ -110,7 +111,7 @@ const ConfigBuilderView = View.extend({
     className: 'hidden',
 
     render: function () {
-        this.$el.html(builderScreenTemplate);
+        this.$el.html(builderScreenTemplate());
         this.$('#configFields').append(
             this.runParameters.render().el,
             this.laserList.render().el,

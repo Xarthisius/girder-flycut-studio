@@ -7,8 +7,9 @@
  * is not saved and does not make the form dirty.
  */
 import { previewLayout } from '../core/preview.js';
-import previewPanelTemplate from '../templates/previewPanel.html?raw';
+import previewPanelTemplate from '../templates/previewPanel.pug';
 import { escapeHtml } from '../util.js';
+import '../stylesheets/previewPanel.styl';
 
 const View = girder.views.View;
 const EMPTY = '<div class="empty-preview">Choose a template to see its flyer layout.</div>';
@@ -43,7 +44,7 @@ const PreviewView = View.extend({
 
     render: function () {
         if (!this.$el.children().length) {
-            this.$el.html(previewPanelTemplate);
+            this.$el.html(previewPanelTemplate());
         }
         const detail = this.model.get('templateDetail');
         const zoom = this.model.get('zoom');

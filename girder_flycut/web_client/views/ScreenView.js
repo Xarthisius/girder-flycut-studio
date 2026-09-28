@@ -13,6 +13,7 @@
  * button greys out would throw away the user's selection mid-interaction.
  */
 import { escapeHtml } from '../util.js';
+import '../stylesheets/pickerScreen.styl';
 
 const View = girder.views.View;
 
@@ -37,7 +38,7 @@ const ScreenView = View.extend({
 
     render: function () {
         if (!this.$el.children().length) {
-            this.$el.html(this.template);
+            this.$el.html(this.template());
             this.onFirstRender();
         }
         this.renderContent();

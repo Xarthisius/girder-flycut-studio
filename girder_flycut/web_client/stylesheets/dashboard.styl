@@ -1,0 +1,318 @@
+// The dashboard's base: the reset, the root element, and the controls every
+// screen uses -- buttons, fields, inputs, the help tooltip and the toast.
+// Everything else is one file per view, imported from the view itself.
+@import 'variables'
+
+.g-flycut-dashboard
+  [hidden]
+    display none !important
+
+  *
+    box-sizing border-box
+
+  &
+    display block
+    margin 0
+    background var(--paper)
+    color var(--ink)
+    font 14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
+
+  .button
+    border 0
+    border-radius 8px
+    padding 10px 15px
+    font 600 13px inherit
+    cursor pointer
+
+  .button.primary
+    background var(--green)
+    color #fff
+
+  .button.ghost
+    background #fff
+    border 1px solid var(--line)
+    color var(--ink)
+
+  .eyebrow
+    font-weight 750
+    font-size 11px
+    letter-spacing 0.18em
+    color var(--orange)
+    margin 0 0 10px
+
+  .field
+    font-size 12px
+    font-weight 700
+    letter-spacing 0.01em
+    display block
+
+  .required
+    color var(--orange)
+
+  input
+  select
+    width 100%
+    height 42px
+    border 1px solid #ccd4d0
+    border-radius 8px
+    background #fff
+    padding 0 12px
+    margin-top 7px
+    color var(--ink)
+    font 14px inherit
+    outline none
+
+  input:focus
+  select:focus
+    border-color var(--green)
+    box-shadow 0 0 0 3px rgba(35,92,78,0.1)
+
+  input.invalid
+  select.invalid
+    border-color var(--danger)
+
+  .input-wrap
+    position relative
+    display block
+
+  .input-wrap input
+    padding-right 42px
+
+  .help
+    position absolute
+    right 9px
+    top 16px
+    width 23px
+    height 23px
+    border-radius 50%
+    border 1px solid #bdc7c2
+    background #fff
+    color var(--muted)
+    font-weight 800
+    cursor help
+
+  .help:hover:after
+  .help:focus:after
+    content attr(data-tip)
+    position absolute
+    right -8px
+    bottom 31px
+    width 240px
+    background var(--ink)
+    color #fff
+    padding 9px 11px
+    border-radius 7px
+    font 400 11px/1.4 inherit
+    text-align left
+    z-index 5
+    box-shadow var(--shadow)
+
+  .field-note
+  .error
+    display block
+    font-weight 400
+    color var(--muted)
+    font-size 10px
+    margin-top 5px
+
+  .remove-btn
+    border 0
+    background none
+    color #89938f
+    cursor pointer
+    font-size 18px
+    line-height 1
+
+  .remove-btn:hover
+    color var(--danger)
+
+  .toast
+    position fixed
+    bottom 24px
+    left 50%
+    transform translate(-50%,20px)
+    background var(--ink)
+    color #fff
+    padding 10px 15px
+    border-radius 8px
+    opacity 0
+    pointer-events none
+    transition 0.2s
+    font-size 12px
+    z-index 40
+
+  .toast.show
+    opacity 1
+    transform translate(-50%,0)
+
+  .hidden
+    display none!important
+
+  .checkbox-field input[type=checkbox]
+    width 18px
+    height 18px
+    margin 8px 8px 8px 0
+    vertical-align middle
+    accent-color var(--green)
+
+  .field-label
+    display inline-flex
+    align-items center
+    gap 6px
+    min-height 20px
+
+  .field-label .help
+    position relative
+    top auto
+    right auto
+    width 17px
+    height 17px
+    padding 0
+    font-size 10px
+    line-height 15px
+    flex none
+
+  .field-label .help:hover:after
+  .field-label .help:focus:after
+    left 0
+    right auto
+    bottom 25px
+
+  .input-wrap input
+    padding-right 12px
+
+  .help
+    z-index 2
+
+  .help:hover:after
+  .help:focus:after
+  .field-label .help:hover:after
+  .field-label .help:focus:after
+    content none
+
+  .floating-help
+    position fixed
+    z-index 10000
+    max-width unquote('min(280px,calc(100vw - 20px))')
+    padding 10px 12px
+    border-radius 8px
+    background var(--ink)
+    color #fff
+    font 12px/1.5 ui-sans-serif,system-ui,sans-serif
+    box-shadow 0 4px 16px #0003
+    pointer-events none
+
+  .workflow-card
+    display flex
+    flex-direction column
+    align-items flex-start
+    border 1px solid var(--line)
+    border-radius 14px
+    background white
+    padding 26px
+    min-height 270px
+
+  .workflow-card h2
+    font-size 20px
+    margin 22px 0 8px
+
+  .workflow-card p
+    color var(--muted)
+    line-height 1.6
+    flex 1
+    margin 0 0 24px
+
+  .workflow-card .button
+    text-decoration none
+    display inline-block
+
+  .completed-link
+    background #e9eeeb
+    color #53645c
+    border 1px solid #cdd7d1
+
+  .completed-link:hover
+    background var(--mint)
+    color var(--green)
+
+  button:disabled
+    opacity 0.45
+    cursor not-allowed
+
+  .artifact-links
+    display flex
+    flex-wrap wrap
+    gap 16px
+    margin-top 20px
+
+  .artifact-links a
+    color var(--green)
+    font-size 12px
+
+  #builderMode
+    color var(--muted)
+    font-size 12px
+
+  #configFields
+    border 0
+    padding 0
+    margin 0
+    min-width 0
+
+  #builderScreen.read-only #configFields
+    opacity 0.8
+
+  @media (max-width800px)
+    .workflow-card
+      min-height 220px
+
+  .workflow-card.unavailable
+    background #f2f4f2
+    color #7b8580
+
+  #saveAsName
+    width 240px
+    max-width 45vw
+    height 38px
+    margin 0
+
+  #backWorkflowBtn
+    font-size 20px
+    line-height 18px
+    padding 10px 13px
+
+  #runStatus:empty
+  #artifacts:empty
+    display none
+
+  #runStatus
+    margin 20px 36px
+
+  #stackid[readonly]
+    background #e8edea
+    color #64736b
+
+  #autoStackIdBtn[aria-pressed="true"]
+    background var(--mint)
+    border-color var(--green)
+
+  #autoStackIdBtn
+    flex-basis 52px
+    font 700 10px/1 system-ui
+    letter-spacing 0.04em
+
+  #completeWorkflowBtn
+    grid-column 1/-1
+    min-height 145px
+    background var(--green)
+    color white
+    border 2px solid var(--green)
+    box-shadow 0 5px 18px #163d2820
+
+  #completeWorkflowBtn small
+    color inherit
+    opacity 0.9
+
+  #completeWorkflowBtn:hover:not(:disabled)
+    background #234c38
+    color white

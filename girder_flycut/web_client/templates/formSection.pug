@@ -1,0 +1,24 @@
+//- The three form sections share a header: a number, a name, and the chevron
+//- that turns when the section is collapsed.
+//-
+//- Two things can sit beside the name, and they sit in different places. A
+//- count -- how many laser entries, how many custom fields -- is a sibling of
+//- the title span. The marker that says a requirement is unmet is inside it,
+//- so it reads as part of the name. Only Run Parameters has requirements, so
+//- that one is a flag rather than a second block.
+mixin sectionSummary(number, title)
+  summary
+    span
+      b= number
+      if attributes.marker
+        |  #{title} #[span#runRequiredMarker.section-required-marker.hidden(aria-label='Required fields incomplete') *]
+      else
+        |  #{title}
+    if block
+      block
+    span.chevron ⌃
+
+//- The circled question mark beside a field label. The tip is rendered into a
+//- tooltip at the document root, because a scrolling panel would clip it.
+mixin help(label, tip)
+  button.help(type='button', aria-label=label, data-tip=tip) ?

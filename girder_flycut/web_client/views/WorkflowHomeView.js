@@ -6,8 +6,9 @@
  * the builder on the way.
  */
 import { homeState } from '../core/workflow.js';
-import workflowHomeTemplate from '../templates/workflowHome.html?raw';
+import workflowHomeTemplate from '../templates/workflowHome.pug';
 import ScreenView from './ScreenView.js';
+import '../stylesheets/workflowHome.styl';
 
 const WorkflowHomeView = ScreenView.extend({
     events: {

@@ -11,8 +11,9 @@
  * reason the panel knows about the rest of the form.
  */
 import { statusLabel } from '../core/validate.js';
-import statusPanelTemplate from '../templates/statusPanel.html?raw';
+import statusPanelTemplate from '../templates/statusPanel.pug';
 import { escapeHtml } from '../util.js';
+import '../stylesheets/statusPanel.styl';
 
 const View = girder.views.View;
 /** How long a linked-to control stays highlighted after being jumped to. */
@@ -53,7 +54,7 @@ const StatusPanelView = View.extend({
 
     render: function (showErrors = false) {
         if (!this.$el.children().length) {
-            this.$el.html(statusPanelTemplate);
+            this.$el.html(statusPanelTemplate());
         }
         const result = this.status();
         // Anything typed since the box was ticked withdraws the

@@ -8,7 +8,7 @@
  * it was fetched.
  */
 import { catalogOptions, materialSummary, resolveMaterial, templateSummary } from '../core/catalog.js';
-import runParametersTemplate from '../templates/runParameters.html?raw';
+import runParametersTemplate from '../templates/runParameters.pug';
 import { escapeHtml } from '../util.js';
 
 const View = girder.views.View;
@@ -34,7 +34,7 @@ const RunParametersView = View.extend({
 
     render: function () {
         if (!this.$el.children().length) {
-            this.$el.html(runParametersTemplate);
+            this.$el.html(runParametersTemplate());
         }
         this.renderCatalog();
         return this;

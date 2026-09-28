@@ -7,35 +7,17 @@
  * are named for their position, so almost every change renames several of them
  * and the whole list is rewritten anyway.
  *
- * Which entries are greyed out is core/laser.js's laserListState. Overflow and
- * disabled look alike and are not: an overflow entry's checkbox is disabled,
- * because its enabled state is restored if the row fits again.
+ * Which entries are greyed out is core/laser.js's laserListState, and what a
+ * card looks like is templates/laserCard.pug. Overflow and disabled look alike
+ * and are not: an overflow entry's checkbox is disabled, because its enabled
+ * state is restored if the row fits again.
  */
 import { LASER_LIMIT } from '../core/laser.js';
-import laserParametersTemplate from '../templates/laserParameters.html?raw';
+import laserCardTemplate from '../templates/laserCard.pug';
+import laserParametersTemplate from '../templates/laserParameters.pug';
+import '../stylesheets/laserList.styl';
 
 const View = girder.views.View;
-
-/** One entry's card. Split out because it is the only markup here worth reading. */
-function card(laser, { overflow, unused }) {
-    const locked = laser.locked ? 'disabled' : '';
-    const field = (key, label, attrs) =>
-        `<label>${label}<input data-key="${key}" ${attrs} value="${laser[key]}" ${locked}></label>`;
-    return `
-        <article class="laser-card ${unused ? 'unused' : ''} ${laser.locked ? 'import-locked' : ''}" data-id="${laser.id}">
-          <div class="laser-head"><span class="drag-handle" draggable="true" aria-label="Drag ${laser.name} to reorder" title="Drag to reorder">⠿</span><i class="color-swatch" style="--swatch:${laser.color}"></i><span class="laser-name">Layer ${laser.name}</span>${laser.isDefault ? '<span class="default-badge">Default</span>' : ''}${laser.fromImport ? `<span class="source-badge ${laser.locked ? '' : 'edited'}">${laser.locked ? 'From Import' : 'Edited from Import'}</span>` : ''}${unused ? '<span class="unused-badge">Unused</span>' : ''}${laser.fromImport ? `<button class="lock-btn toggle-lock" type="button" aria-label="${laser.locked ? 'Unlock' : 'Restore'} imported parameters">${laser.locked ? 'Unlock' : 'Restore'}</button>` : ''}<button class="remove-btn remove-laser" type="button" aria-label="Remove laser setting">×</button></div>
-          <div class="laser-grid">
-            <label>Layer<input data-key="name" value="${laser.name}" readonly aria-label="Locked layer name ${laser.name}"></label>
-            <div class="color-field"><span>Color</span><div class="color-controls"><input class="wheel-editor" type="color" aria-label="${laser.name} color picker" value="${laser.color}" ${locked}><input class="hex-editor" type="text" aria-label="${laser.name} hex color" value="${laser.color}" maxlength="7" placeholder="#RRGGBB" spellcheck="false" ${locked}></div></div>
-            <label class="checkbox-field layer-enabled ${overflow ? 'overflow-enabled' : ''}" title="${overflow ? 'Unused by template; enabled state is restored when this row fits' : ''}"><span>Enabled</span><span class="checkbox-control"><input data-key="enabled" type="checkbox" aria-label="Enable ${laser.name}" ${!overflow && laser.enabled !== false ? 'checked' : ''} ${overflow || laser.locked ? 'disabled' : ''}></span></label>
-            ${field('power', 'Power %', 'type="number" min="0" max="100" step="0.1"')}
-            ${field('speed', 'Speed mm/s', 'type="number" min="0.01" step="0.01"')}
-            ${field('qpulsewidth', 'QPulse ns', 'type="number" min="0" step="1"')}
-            ${field('frequency', 'Frequency kHz', 'type="number" min="0" step="0.1"')}
-            ${field('passes', 'Passes', 'type="number" min="1" step="1"')}
-          </div>
-        </article>`;
-}
 
 const LaserListView = View.extend({
     events: {
@@ -103,11 +85,11 @@ const LaserListView = View.extend({
 
     render: function () {
         if (!this.$el.children().length) {
-            this.$el.html(laserParametersTemplate);
+            this.$el.html(laserParametersTemplate());
         }
         const state = this.collection.listState(this.model.layerCount(), this.assignment().repeat);
         this.$('#laserList').html(this.collection.plain()
-            .map((laser, index) => card(laser, state.cards[index])).join(''));
+            .map((laser, index) => laserCardTemplate({ laser, ...state.cards[index] })).join(''));
         this.$('#laserCount').text(state.count);
         this.$('#addLaserBtn')
             .prop('disabled', state.addDisabled)

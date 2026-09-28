@@ -11,8 +11,9 @@
  * tagName/id/className supply the wrapper, so nothing nests and the shell's
  * showScreen() still finds #adminSettingsScreen by id.
  */
-import adminSettingsTemplate from '../templates/adminSettings.html?raw';
+import adminSettingsTemplate from '../templates/adminSettings.pug';
 import { escapeHtml, request } from '../util.js';
+import '../stylesheets/adminSettings.styl';
 
 const View = girder.views.View;
 const ROLES = ['creators', 'owners', 'editors', 'viewers'];
@@ -60,7 +61,7 @@ const AdminSettingsView = View.extend({
     className: 'workflow-home settings-screen hidden',
 
     render: function () {
-        this.el.innerHTML = adminSettingsTemplate;
+        this.$el.html(adminSettingsTemplate());
         return this;
     },
 

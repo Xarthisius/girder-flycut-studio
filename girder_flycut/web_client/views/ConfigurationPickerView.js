@@ -8,7 +8,7 @@
  */
 import { savedTime, selectMarkup } from '../core/records.js';
 import { configurationPickerState } from '../core/workflow.js';
-import configurationPickerTemplate from '../templates/configurationPicker.html?raw';
+import configurationPickerTemplate from '../templates/configurationPicker.pug';
 import ScreenView from './ScreenView.js';
 
 const ConfigurationPickerView = ScreenView.extend({

@@ -10,7 +10,7 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 | **Against** | `girder/WEB_CLIENT_CONVENTIONS.md`, `girder/CLAUDE.md`, `girder-dashboards/docs/extending.md` |
 | **Issues** | 33 — 8 critical, 14 major, 11 minor |
 | **Phases** | 7 |
-| **Status** | Phases 0–3 and 4a–4d merged; 4e in flight. **23 of 33 closed, none partial.** |
+| **Status** | Phases 0–4 complete; 4f in flight. **25 of 33 closed, none partial.** |
 
 > The register below is the original audit and its severities are as-found. Entries carry
 > their own revision notes where execution changed the picture. `CLAUDE.md` has the short
@@ -20,26 +20,23 @@ and a seven-phase route to a conventional Girder 5 dashboard plugin.
 
 ## Progress
 
-**Closed (23).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C1 C4 C5 C7 · D1 D2 D3 · E1 E2 E3 ·
-F2 F4.
+**Closed (25).** A1 A2 A3 A4 A5 A6 · B1 B2 B3 B5 · C1 C2 C3 C4 C5 C7 · D1 D2 D3 ·
+E1 E2 E3 · F2 F4.
 
-**Untouched (10).**
+**Untouched (8).**
 
 | Issue | What is left | Phase |
 |---|---|---|
-| **C2 / C3** | Markup and styles are not yet Pug and Stylus | 4f — *next* |
-| **B4 E4 E5 E6** | Line length, a config model, local imports, the `rest.py` split | 5 |
+| **B4 E4 E5 E6** | Line length, a config model, local imports, the `rest.py` split | 5 — *next* |
 | **C6 E7 G1** | The config page and the four endpoints behind it | 6 |
 | **F1 F3** | The vendored dependency; package metadata | 6 |
 
-Every Critical is closed. C4 closed across 4d and 4e: its headline — "cannot be
-instantiated twice" — had been fixed back in Phase 3, and what remained was shape, which
-`WorkflowModel`, `BuilderModel`, `LaserCollection` and `CustomFieldCollection` supply. D1
-closed in 4d; no test in the repository reads source as a string.
+**Phase 4 is complete.** Every Critical and every web-client convention issue is closed.
+The client is eleven Backbone views over four models and two collections, with one `.pug`
+and one `.styl` per view, built by Vite from its own npm project, and checked by eslint,
+pug-lint and stylelint. No test reads source as a string.
 
-Phase 4 has one thing left, and it is the mechanical half: the markup is already one file
-per view, so C2 is a per-fragment translation to Pug, and C3 splits one 1,526-line
-stylesheet the same way.
+What is left is server-side — Phase 5 — and packaging, plus the config page, in Phase 6.
 
 ---
 
@@ -321,7 +318,17 @@ A single `Dashboard` view renders `workflowHome`, `configurationPicker`, `lightb
 **Fix** — The screens already map one-to-one onto views — see the Phase 4 decomposition.
 
 #### C2 — Markup is a JSON-encoded string constant
-**Major · Phase 4**
+**Major · ~~Phase 4~~ → closed in 4f**
+
+*Closed.* Sixteen `.pug` templates and four mixins. Every one was rendered and
+compared against the HTML it replaced, canonicalised so attribute order and
+insignificant whitespace do not count; all sixteen match.
+
+Two things that check caught. `&nbsp;` in a mixin is a non-breaking space, and
+Python's `str.split()` treats U+00A0 as whitespace, so the first comparison
+reported a match on markup that differed. And `pugLintConfig` — not
+`pug-lint` — is the key pug-lint reads from `package.json`, so it had been
+exiting 0 on a deliberately broken file.
 
 The entire UI is one `container.innerHTML = "…"` assignment spanning a single line of the bundle. No
 Pug, so no `pug-lint`, no template reuse, no mixins, and no diffable markup.
@@ -330,7 +337,20 @@ Pug, so no `pug-lint`, no template reuse, no mixins, and no diffable markup.
 mixins.
 
 #### C3 — Styles are a JSON-encoded string constant
-**Major · Phase 4**
+**Major · ~~Phase 4~~ → closed in 4f**
+
+*Closed.* Twelve `.styl` files, each imported for side effect from its view,
+nested under the root class so `.g-flycut-dashboard` is written once per file
+rather than 288 times, with the ten design tokens in `variables.styl`.
+
+The stylesheet was accreted rather than organised — `.flyer` defined three
+times, `.laser-grid` four, and 22 selectors relying on a later rule beating an
+earlier one — so grouping by view reorders all of it. It was proved rather
+than asserted: every element on every screen captured with `getComputedStyle`
+before and after, 3,088 elements across eight screens. The first run found 208
+differences from two causes, both a modifier losing to its base class at equal
+specificity on source order alone. Both are written as both classes now. The
+final diff is zero.
 
 Same shape as C2: `style.textContent = "…"`. No Stylus, no `stylelint`, no shared token file, and no
 `css=[…]` in the static registration.
