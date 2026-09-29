@@ -1,0 +1,16 @@
+header.topbar
+  a#studioHomeLink.brand(href='#', aria-label='Flyer Studio home')
+    span.brand-mark(aria-hidden='true')
+      i
+      i
+      i
+    span
+      b FLYER STUDIO
+      small#currentPageLabel Home
+  #builderActions.top-actions.hidden
+    button#saveState.save-state(type='button', aria-controls='statusPanel')
+      span
+      |  Incomplete
+    input#jsonFile(type='file', accept='application/json,.json', hidden)
+    button#resetBtn.button.ghost(type='button') Delete
+    button#submitConfigBtn.button.primary(type='button') Submit

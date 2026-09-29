@@ -1,0 +1,135 @@
+.g-flycut-dashboard
+  .topbar
+    height 76px
+    background var(--white)
+    border-bottom 1px solid var(--line)
+    display flex
+    align-items center
+    justify-content space-between
+    padding 0 34px
+    position sticky
+    top 0
+    z-index 20
+
+  .brand
+    display flex
+    align-items center
+    gap 12px
+    color var(--ink)
+    text-decoration none
+    letter-spacing 0.04em
+
+  .brand span:last-child
+    display flex
+    flex-direction column
+
+  .brand b
+    font-size 15px
+
+  .brand small
+    font-size 9px
+    letter-spacing 0.23em
+    color var(--muted)
+
+  .brand-mark
+    width 33px
+    height 33px
+    background var(--green)
+    border-radius 9px
+    display flex
+    align-items center
+    justify-content center
+    gap 2px
+
+  .brand-mark i
+    display block
+    width 4px
+    background #fff
+    border-radius 3px
+
+  .brand-mark i:nth-child(1)
+    height 10px
+
+  .brand-mark i:nth-child(2)
+    height 19px
+
+  .brand-mark i:nth-child(3)
+    height 14px
+
+  .top-actions
+    display flex
+    align-items center
+    gap 10px
+
+  .save-state
+    font-size 12px
+    color var(--muted)
+    margin-right 8px
+
+  .save-state span
+    display inline-block
+    width 7px
+    height 7px
+    border-radius 50%
+    background #54a87b
+    margin-right 6px
+
+  @media (max-width650px)
+    .topbar
+      padding 0 16px
+
+    .save-state
+      display none
+
+    .topbar
+      height auto
+      min-height 76px
+      gap 8px
+
+    .brand small
+      display none
+
+    .top-actions
+      gap 5px
+
+    .top-actions .button
+      padding 8px
+      font-size 11px
+
+  button.save-state
+    border 0
+    background transparent
+    cursor pointer
+    text-decoration underline
+    text-underline-offset 3px
+    padding 6px
+
+  .save-state[data-status=incomplete] span
+    background #b74c40
+
+  .save-state[data-status=needs-validation] span
+    background #bf872a
+
+  @media (max-width650px)
+    button.save-state
+      display block
+
+  button.save-state
+    text-decoration none
+
+  .save-state[data-status="validated"]
+    color var(--green)
+
+  .topbar
+    height auto
+    min-height 76px
+    flex-wrap wrap
+
+  .top-actions
+    flex-wrap wrap
+
+  .brand small
+    text-transform uppercase
+
+  .topbar .brand b
+    white-space nowrap

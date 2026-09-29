@@ -1,0 +1,24 @@
+//- The builder's frame. #configFields and .viewer-pane are left empty: the six
+//- child views render into them.
+
+mixin viewerTab(name, label, active)
+  button.tab(class=active ? 'active' : '', role='tab', aria-selected=String(Boolean(active)), data-tab=name)= label
+
+nav.builder-nav
+  button#backWorkflowBtn.button.ghost(type='button', aria-label='Back to workflow', title='Back to workflow') ←
+  input#saveAsName(type='text', placeholder='Save as…', aria-label='Save as', maxlength='160')
+  button#saveGirderBtn.button.primary(type='button') Save
+  span#builderMode(aria-live='polite')
+  button#editCopyBtn.button.ghost.hidden(type='button') Edit a copy
+main.workspace
+  section.form-pane(aria-label='Configuration form')
+    .intro
+      h1 Configure Flyer Stack
+    form#configForm(novalidate)
+      fieldset#configFields
+  aside.viewer-pane(aria-label='Configuration viewer')
+    .tabs(role='tablist')
+      +viewerTab('preview', 'Preview', true)
+      +viewerTab('json', 'JSON')
+      +viewerTab('status', 'Status')
+#toast.toast(role='status')

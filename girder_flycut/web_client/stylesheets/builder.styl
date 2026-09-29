@@ -1,0 +1,251 @@
+.g-flycut-dashboard
+  .workspace
+    max-width 1480px
+    margin auto
+    display grid
+    grid-template-columns minmax(520px,46%) 1fr
+    min-height calc(100vh - 76px)
+
+  .form-pane
+    padding 45px 44px 80px
+    border-right 1px solid var(--line)
+    min-width 0
+
+  .intro
+    margin-bottom 30px
+
+  .intro h1
+    font-family Georgia,serif
+    font-size 36px
+    font-weight 500
+    letter-spacing -0.03em
+    margin 0 0 8px
+
+  .intro>p:last-child
+    color var(--muted)
+    margin 0
+
+  .form-section
+    background var(--white)
+    border 1px solid var(--line)
+    border-radius 12px
+    margin-bottom 14px
+    overflow hidden
+    box-shadow 0 3px 13px rgba(20,36,30,0.025)
+
+  summary
+    list-style none
+    display flex
+    align-items center
+    gap 11px
+    padding 18px 20px
+    cursor pointer
+    font-weight 700
+
+  summary::-webkit-details-marker
+    display none
+
+  summary>span:first-child
+    display flex
+    align-items center
+    gap 11px
+    flex 1
+
+  summary b
+    display inline-grid
+    place-items center
+    width 26px
+    height 26px
+    background var(--mint)
+    border-radius 7px
+    color var(--green)
+    font-size 11px
+
+  .chevron
+    font-size 13px
+    color var(--muted)
+    transition 0.2s
+
+  .form-section:not([open]) .chevron
+    transform rotate(180deg)
+
+  .section-count
+    font-weight 500
+    font-size 11px
+    color var(--muted)
+    background #f1f3f1
+    border-radius 20px
+    padding 4px 9px
+
+  .section-body
+    padding 3px 20px 21px
+    border-top 1px solid #edf0ee
+
+  .two-col
+    display grid
+    grid-template-columns 1fr 1fr
+    gap 17px 18px
+    padding-top 19px
+
+  .error
+  .section-error
+    color var(--danger)
+
+  .section-error
+    font-size 11px
+    margin 8px 0 0
+    min-height 0
+
+  .viewer-pane
+    padding 45px 42px 80px
+    min-width 0
+
+  .tabs
+    display flex
+    gap 25px
+    border-bottom 1px solid var(--line)
+    margin-bottom 16px
+
+  .tab
+    border 0
+    background none
+    padding 0 1px 13px
+    color var(--muted)
+    font 650 13px inherit
+    cursor pointer
+    position relative
+
+  .tab.active
+    color var(--green)
+
+  .tab.active:after
+    content ""
+    height 2px
+    position absolute
+    left 0
+    right 0
+    bottom -1px
+    background var(--green)
+
+  .viewer-panel
+    display none
+    background #fff
+    border 1px solid var(--line)
+    border-radius 12px
+    overflow hidden
+    box-shadow var(--shadow)
+    min-height 650px
+
+  .viewer-panel.active
+    display block
+
+  @media (max-width1000px)
+    .workspace
+      grid-template-columns 1fr
+
+    .form-pane
+      border-right 0
+      border-bottom 1px solid var(--line)
+
+    .viewer-pane
+      padding-top 25px
+
+  @media (max-width650px)
+    .workspace .form-pane
+    .viewer-pane
+      padding-left 16px
+      padding-right 16px
+
+    .two-col
+      grid-template-columns 1fr
+
+    .intro h1
+      font-size 30px
+
+  .section-required-marker
+    color var(--danger)
+    font-size 17px
+    line-height 1
+    margin-left -5px
+
+  .section-subtitle
+    font-size 13px
+    font-weight 650
+    color #596e64
+    margin 20px 0 12px
+    letter-spacing 0.07em
+    text-transform uppercase
+    display flex
+    align-items center
+    gap 12px
+
+  .section-subtitle:after
+    content ""
+    height 1px
+    flex 1
+    background #e0e7e3
+
+  .tabs
+    display flex
+    gap 4px
+    padding 5px
+    border 1px solid var(--line)
+    border-radius 10px
+    background #eaf0ec
+    margin-bottom 18px
+
+  .tabs .tab
+    flex 1
+    border 0
+    border-radius 7px
+    padding 10px 16px
+    background transparent
+    font-size 11px
+    font-weight 700
+    letter-spacing 0.09em
+    text-transform uppercase
+    color var(--muted)
+
+  .tabs .tab.active
+    background white
+    color var(--green)
+    box-shadow 0 1px 4px #183a2520
+
+  .tabs .tab:after
+    display none
+
+  .builder-nav
+    padding 12px 32px
+    display flex
+    gap 12px
+    align-items center
+    background #eaf0ec
+    border-bottom 1px solid var(--line)
+
+  .builder-nav
+    flex-wrap wrap
+    gap 10px
+
+  .template-picker-row
+    display flex
+    gap 8px
+    align-items center
+    min-width 0
+    margin-top 7px
+
+  .template-picker-row select
+    flex 1
+    min-width 0
+    margin-top 0
+
+  .template-picker-row button
+    flex 0 0 38px
+    height 42px
+    padding 0
+    font-size 22px
+    line-height 1
+
+  .template-picker-row input
+    flex 1
+    min-width 0
+    margin-top 0

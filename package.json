@@ -1,0 +1,46 @@
+{
+  "name": "girder-flycut-studio",
+  "version": "1.0.0",
+  "description": "Repository-wide linting and tests for Flyer Studio",
+  "author": "Max Berner <bernermaximus@gmail.com> (https://github.com/mxberner)",
+  "contributors": [
+    "Kacper Kowalik <xarthisius.kk@gmail.com> (https://github.com/Xarthisius)"
+  ],
+  "private": true,
+  "type": "module",
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "build": "npm --prefix girder_flycut/web_client run build",
+    "dev": "npm --prefix girder_flycut/web_client run dev",
+    "lint": "eslint . && pug-lint girder_flycut && NODE_OPTIONS=--no-deprecation stylelint \"girder_flycut/**/*.styl\"",
+    "format": "eslint --fix .",
+    "test": "node tests/core.mjs && node tests/status.mjs && node tests/workflow.cjs && node tests/complete_workflow.cjs && node tests/bundle.cjs"
+  },
+  "devDependencies": {
+    "@girder/eslint-config": "^3.2.17",
+    "@girder/pug-lint-config": "^3.2.17",
+    "eslint": "^8.57.1",
+    "eslint-config-semistandard": "^17.0.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-backbone": "^2.1.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-n": "^15.7.0",
+    "eslint-plugin-promise": "^6.6.0",
+    "pug": "^3.0.4",
+    "pug-lint": "^2.7.0",
+    "stylelint": "^16.26.1",
+    "stylelint-stylus": "^1.0.0",
+    "stylus": "^0.64.0"
+  },
+  "stylelint": {
+    "extends": [
+      "stylelint-stylus/standard"
+    ]
+  },
+  "pugLintConfig": {
+    "extends": "@girder/pug-lint-config",
+    "excludeFiles": [
+      "**/node_modules/"
+    ]
+  }
+}

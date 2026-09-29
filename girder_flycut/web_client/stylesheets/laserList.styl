@@ -1,0 +1,409 @@
+.g-flycut-dashboard
+  .laser-list
+    padding-top 15px
+
+  .laser-card
+    border 1px solid var(--line)
+    border-radius 10px
+    padding 14px
+    margin-bottom 11px
+    background #fbfcfb
+
+  .laser-head
+    display flex
+    align-items center
+    gap 9px
+    margin-bottom 12px
+
+  .color-swatch
+    width 15px
+    height 15px
+    border-radius 50%
+    background var(--swatch)
+    box-shadow 0 0 0 3px #fff,0 0 0 4px #ccd4d0
+
+  .laser-name
+    font-weight 750
+    flex 1
+
+  .laser-grid
+    display grid
+    grid-template-columns 1.35fr 0.7fr 1fr 1fr 0.7fr
+    gap 9px
+
+  .laser-grid label
+  .custom-row label
+    font-size 9px
+    color var(--muted)
+    font-weight 700
+    text-transform uppercase
+    letter-spacing 0.07em
+
+  .laser-grid input
+  .custom-row input
+    margin-top 5px
+    height 36px
+
+  .color-input
+    padding 4px
+    height 36px
+
+  .dashed
+    width 100%
+    border 1px dashed #afbbb5
+    background #f8faf8
+    color var(--green)
+    padding 11px
+
+  .dashed:hover
+    background var(--mint)
+
+  @media (max-width650px)
+    .laser-grid
+      grid-template-columns 1fr 1fr
+
+    .laser-grid label:first-child
+      grid-column 1/-1
+
+  .laser-card.unused
+    background #f2f3f2
+    border-style dashed
+    opacity 0.72
+
+  .unused-badge
+    font-size 9px
+    font-weight 750
+    text-transform uppercase
+    letter-spacing 0.06em
+    color #68736f
+    background #e3e6e4
+    padding 3px 7px
+    border-radius 12px
+
+  .laser-grid
+    grid-template-columns 0.7fr 0.6fr 0.8fr 0.95fr 1.15fr 1fr 0.65fr
+    gap 8px
+
+  .laser-grid input[readonly]
+    background #eef1ef
+    color #59645f
+    font-weight 750
+
+  @media (max-width1200px)
+    .laser-grid
+      grid-template-columns repeat(4,1fr)
+
+    .laser-grid label:first-child
+      grid-column auto
+
+  @media (max-width650px)
+    .laser-grid
+      grid-template-columns 1fr 1fr
+
+  .locked-color
+    display flex
+    align-items center
+    gap 7px
+    height 36px
+    margin-top 5px
+    padding 0 8px
+    border 1px solid #ccd4d0
+    border-radius 8px
+    background #eef1ef
+
+  .locked-color i
+    display block
+    width 20px
+    height 20px
+    border-radius 5px
+    background var(--swatch)
+    box-shadow inset 0 0 0 1px rgba(0,0,0,0.18)
+
+  .locked-color code
+    font-size 9px
+    color #59645f
+
+  .dashed.surplus
+  .dashed.surplus:hover
+    background #e4e7e5
+    border-color #aeb5b1
+    color #737c78
+
+  .excel-import
+    display flex
+    align-items center
+    gap 10px
+    margin-top 10px
+
+  .excel-import .button
+    white-space nowrap
+
+  .excel-import small
+    font-size 10px
+    color var(--muted)
+
+  @media (max-width650px)
+    .excel-import
+      align-items stretch
+      flex-direction column
+
+  .assignment-controls
+    display grid
+    grid-template-columns 180px 180px 1fr
+    gap 12px
+    align-items end
+    padding 16px 0 2px
+
+  .assignment-controls p
+    margin 0 0 10px
+    color var(--muted)
+    font-size 10px
+
+  .repeat-input
+    display flex
+    align-items center
+    gap 7px
+
+  .repeat-input input
+    width 72px
+
+  .repeat-input span
+    font-size 11px
+    color var(--muted)
+    text-transform none
+
+  .source-badge
+    font-size 9px
+    font-weight 750
+    text-transform uppercase
+    letter-spacing 0.06em
+    color #245d50
+    background #dcebe5
+    padding 3px 7px
+    border-radius 12px
+
+  .lock-btn
+    border 1px solid #b8c2bd
+    background #fff
+    color #52605a
+    border-radius 12px
+    padding 3px 8px
+    font-size 9px
+    font-weight 750
+    cursor pointer
+
+  .locked-color
+    width 42px
+
+  .locked-color i
+    width 24px
+
+  .laser-grid
+    grid-template-columns repeat(4,minmax(0,1fr))
+
+  @media (max-width850px)
+    .assignment-controls
+      grid-template-columns 1fr 1fr
+
+    .assignment-controls p
+      grid-column 1/-1
+
+  .source-badge.edited
+    color #9d2f2f
+    background #f5dddd
+
+  .default-badge
+    font-size 9px
+    font-weight 750
+    text-transform uppercase
+    letter-spacing 0.06em
+    color #65551a
+    background #f3ebc8
+    padding 3px 7px
+    border-radius 12px
+
+  @media (max-width650px)
+    .laser-grid
+      grid-template-columns repeat(2,minmax(0,1fr))
+
+  .import-locked .laser-grid input:disabled
+    opacity 1
+    background #e8ecea
+    color #66706c
+    cursor not-allowed
+
+  .drag-handle
+    color #82908a
+    cursor grab
+    font-size 19px
+    line-height 1
+    user-select none
+
+  .drag-handle:active
+    cursor grabbing
+
+  .laser-card.dragging
+    opacity 0.35
+
+  .laser-card.drag-over
+    border-color var(--green)
+    box-shadow 0 0 0 2px rgba(35,92,78,0.13)
+
+  .assignment-controls .checkbox-field
+    padding-bottom 4px
+
+  .template-setting
+    border-style dashed
+    background #edf0ee
+
+  .template-setting .laser-grid input[type=number]
+    color var(--muted)
+    background #eef1ef
+
+  .assignment-controls
+    grid-template-columns minmax(170px,1fr) minmax(170px,1fr)
+    padding-top 0
+    gap 16px
+
+  .assignment-controls .checkbox-field
+    display flex
+    align-items center
+    min-height 42px
+    margin 0
+    padding 0
+    white-space nowrap
+
+  .laser-grid .layer-enabled
+    display flex
+    flex-direction column
+
+  .laser-grid .checkbox-control
+    display flex
+    align-items center
+    justify-content flex-start
+    height 36px
+    margin-top 5px
+
+  .laser-grid .checkbox-control input[type=checkbox]
+    width 18px
+    height 18px
+    margin 0
+
+  .template-setting .laser-grid input:disabled
+    background #eef1ef
+    color var(--muted)
+
+  .overflow-enabled>span:first-child
+    text-decoration line-through
+
+  .overflow-enabled .checkbox-control
+    position relative
+
+  .overflow-enabled .checkbox-control:after
+    content ""
+    position absolute
+    left 0
+    top 17px
+    width 20px
+    height 2px
+    background var(--muted)
+    transform rotate(-45deg)
+    pointer-events none
+
+  .assignment-controls .checkbox-field
+    align-self center
+    min-height 0
+    transform translateY(-3px)
+
+  .assignment-controls .checkbox-field input[type=checkbox]
+    margin 0 8px 0 0
+
+  .color-field>span
+    font-size 9px
+    color var(--muted)
+    font-weight 700
+    text-transform uppercase
+    letter-spacing 0.07em
+
+  .hex-toggle
+    width 100%
+    cursor pointer
+
+  .hex-editor
+    font-family ui-monospace,monospace
+    font-size 11px
+    padding 0 5px
+    min-width 75px
+
+  .color-field
+    display flex
+    flex-direction column
+    align-items flex-start
+
+  .color-field>span
+    line-height 13px
+
+  .hex-toggle.locked-color
+    width 36px
+    height 36px
+    min-height 36px
+    justify-content center
+    padding 7px
+    margin-top 5px
+
+  .hex-toggle i
+    width 20px
+    height 20px
+    flex none
+
+  .wheel-editor
+    width 36px
+    height 32px
+    padding 2px
+    margin-top 6px
+
+  .hex-editor
+    width 90px
+
+  .color-controls
+    display flex
+    align-items center
+    gap 6px
+    margin-top 5px
+    width 100%
+    min-width 0
+
+  .color-controls .wheel-editor
+    flex 0 0 36px
+    width 36px
+    height 36px
+    margin 0
+    padding 7px
+    border-radius 8px
+    background #eef1ef
+    cursor pointer
+
+  .wheel-editor::-webkit-color-swatch-wrapper
+    padding 0
+
+  .wheel-editor::-webkit-color-swatch
+    border 0
+    border-radius 4px
+
+  .wheel-editor::-moz-color-swatch
+    border 0
+    border-radius 4px
+
+  .color-controls .hex-editor
+    flex 1
+    width 76px
+    min-width 0
+    max-width 90px
+    height 36px
+    margin 0
+    font-size 10px
+    padding 0 4px
+
+  #builderScreen.read-only .drag-handle
+    pointer-events none
+    opacity 0.4

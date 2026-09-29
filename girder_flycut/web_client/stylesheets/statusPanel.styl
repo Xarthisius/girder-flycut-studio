@@ -1,0 +1,77 @@
+.g-flycut-dashboard
+  // - The one viewer panel that is as tall as its content. Both classes, for
+  // - the same reason as the settings screen: specificity rather than load
+  // - order.
+  .viewer-panel.status-panel
+    padding 24px
+    min-height 0
+
+  .status-panel h2
+    font-size 20px
+    margin 0 0 24px
+
+  .status-panel h3
+    font-size 13px
+    color var(--muted)
+    margin 20px 0 12px
+
+  .status-panel ul
+    list-style none
+    margin 0
+    padding 0
+
+  .status-panel li
+    padding 10px 0
+    border-bottom 1px solid var(--line)
+    line-height 1.6
+
+  .status-panel .met
+    color var(--green)
+
+  .status-panel .unmet
+    color var(--danger)
+
+  .violation-link
+    display block
+    width 100%
+    text-align left
+    border 0
+    background none
+    color var(--ink)
+    padding 8px 2px
+    font inherit
+    cursor pointer
+
+  .violation-link:hover
+    color var(--green)
+    background var(--mint)
+
+  .violation-kind
+    display block
+    font-size 10px
+    text-transform uppercase
+    letter-spacing 0.07em
+    color var(--muted)
+    margin-bottom 4px
+
+  .violation-focus
+    outline 2px solid var(--green)!important
+    outline-offset 4px
+    scroll-margin-top 130px
+
+  .validation-ack
+    display flex
+    align-items flex-start
+    gap 10px
+    margin-top 24px
+    padding 16px
+    background var(--mint)
+    border-radius 10px
+    font-size 13px
+    line-height 1.5
+
+  .validation-ack input
+    width 18px
+    height 18px
+    flex none
+    margin 1px 0 0

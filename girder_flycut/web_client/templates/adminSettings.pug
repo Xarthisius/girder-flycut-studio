@@ -1,0 +1,59 @@
+//- The policy screen, in Girder's own plugin-config idiom: Bootstrap form
+//- groups and buttons, no stylesheet of this plugin's own. It renders outside
+//- the dashboard, so it should not look like it.
+
+mixin policyToggle(id, label)
+  .checkbox
+    label
+      input(id=id, type='checkbox')
+      | &nbsp;#{label}
+
+.g-flycut-settings-description
+  p Settings apply to new configurations and IGSNs. Existing files keep their location and permissions.
+
+h4 Shared workspace
+.form-group
+  label(for='workspaceCollection') Collection
+  select#workspaceCollection.form-control
+.form-group
+  button#browseWorkspaceBtn.btn.btn-sm.btn-default(type='button') Choose workspace folder
+.form-group
+  label(for='workspacePath') Workspace path
+  input#workspacePath.form-control(placeholder='/collection/Flyer Studio/Workspace')
+  p.help-block Choose a folder inside a collection. Collaborators also need access to that destination; the settings below do not change the collection’s permissions.
+
+h4 Users and groups
+.form-group
+  label(for='principalSearch') Find a user or group
+  input#principalSearch.form-control(placeholder='Search by name')
+.form-group
+  button#findPrincipalsBtn.btn.btn-sm.btn-default(type='button') Search
+.form-group
+  label(for='principalResults') Results
+  select#principalResults.form-control
+.form-group
+  label(for='principalRole') Add to
+  select#principalRole.form-control
+    option(value='creators') IGSN creators
+    option(value='owners') Owners
+    option(value='editors') Editors
+    option(value='viewers') Viewers
+.form-group
+  button#addPrincipalBtn.btn.btn-sm.btn-default(type='button') Add user or group
+#policyLists
+p.help-block Creators are attribution only. Groups appear as organizational creators. Owners can manage access; editors can modify data; viewers can read. The highest matching access level wins.
+
+h4 Acting user
++policyToggle('creators_include_user', 'Include the registrant as an IGSN creator')
++policyToggle('owners_include_user', 'Include the acting user as an owner')
++policyToggle('editors_include_user', 'Include the acting user as an editor')
++policyToggle('viewers_include_user', 'Include the acting user as a viewer')
+
+h4 Visibility
++policyToggle('public_igsn', 'Make new stack IGSNs public')
++policyToggle('public_files', 'Make new configuration folders and files public')
+p.help-block IGSN access uses the same owners, editors, and viewers. Parent foil permissions remain unchanged.
+
+.form-group
+  button#saveAdminSettingsBtn.btn.btn-sm.btn-primary(type='button') Save settings
+  p#settingsStatus.help-block(role='status')

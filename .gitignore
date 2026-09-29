@@ -1,7 +1,14 @@
 __pycache__/
 *.pyc
 *.egg-info/
-build/
+# Root-anchored: a bare `build/` also matched girder_flycut/web_client/build/,
+# silently keeping the source generator out of version control.
+/build/
+# Nothing is vendored: both dependencies are ordinary PyPI releases. This is
+# here because anchoring `build/` above un-ignored vendor/girder-dashboards/build/,
+# and the same commit that deleted the vendored source swept its build output
+# back in. CI fails if anything under here is ever tracked again.
+/vendor/
 dist/
 .pytest_cache/
 .venv/
@@ -13,8 +20,14 @@ node_modules/
 !.env.example
 local-backups/
 
-# Required prebuilt frontend for the bundled dashboards dependency.
-!vendor/girder-dashboards/girder_dashboards/web_client/dist/
-vendor/girder-dashboards/girder_dashboards/web_client/dist/*
-!vendor/girder-dashboards/girder_dashboards/web_client/dist/girder-plugin-dashboards.umd.cjs
-!vendor/girder-dashboards/girder_dashboards/web_client/dist/style.css
+# Coverage output
+.coverage
+coverage.xml
+htmlcov/
+
+# Generated browser sources and the built bundle
+girder_flycut/web_client/generated/
+girder_flycut/web_client/dist/
+
+# Browser harness artefacts
+test/browser/screenshots/

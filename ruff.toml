@@ -1,0 +1,33 @@
+# Lint and format configuration for girder-flycut-studio.
+#
+# Decision 5 of docs/CONVERSION_PLAN.md: `ruff format` plus import sorting at
+# 120 columns. Phase 5 applied it, so "I" and E501 are gates now rather than
+# deferrals -- the formatter keeps them satisfied, and the three prose lines it
+# would not rewrap were rewrapped by hand in the same commit.
+
+exclude = [
+    ".eggs",
+    ".git",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "_build",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+line-length = 120
+indent-width = 4
+
+target-version = "py310"
+
+[lint]
+select = ["E4", "E5", "E7", "E9", "F", "I"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"

@@ -2,15 +2,21 @@
 
 ## Open the settings
 
-Open **Flyer Studio → Dashboard settings** using the gear in the top bar.
-Edit the **Settings** JSON and click **Save**. The separate in-dashboard admin
-screen is hidden; this dialog is the configuration entry point.
+Go to **Admin console → Plugins** and click the gear beside **Flyer Studio**, or
+open `#plugins/flycut/config` directly. The page is a form: pick the workspace
+folder, search for users and groups to fill the four roles, set the visibility
+flags, and click **Save settings**.
 
-Only users with **Admin access on this dashboard**, including Girder site
-administrators, can save these settings. Read or Write access alone is not enough.
-The settings gear is hidden from other users, and the server enforces the same
-restriction. Readers can retrieve the settings, so do not put passwords or secrets
-in this JSON. Dashboard permissions are separate from workspace and IGSN permissions.
+It replaces the older instruction to hand-edit a **Settings** JSON blob in the
+dashboard's settings dialog. That dialog still exists — it belongs to
+girder-dashboards, not to this plugin — but nothing here needs it any more, and
+writing Girder ObjectIds into it by hand was a reliable way to produce a policy
+that does not validate.
+
+Only **Girder site administrators** can open the config page or save from it;
+the four endpoints behind it are `@access.admin`. Dashboard permissions are
+separate from workspace and IGSN permissions. Readers can still retrieve the
+settings, so do not put passwords or secrets in them.
 
 ## Prepare a shared workspace
 

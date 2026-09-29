@@ -17,3 +17,10 @@ Facilitates the specification, creation, and registration of **Flyer Stacks**, w
 See [Configuration form validation](docs/CONFIGURATION_FORM_VALIDATION.md) for form requirements, acknowledgement rules, and downstream checks.
 
 See [Dashboard configuration](docs/DASHBOARD_CONFIGURATION.md) for administrator setup instructions, a complete settings example, permissions, and the Complete Workflow module.
+
+## Authors and licence
+
+Flyer Studio was written by [Max Berner](https://github.com/mxberner). The conversion to a
+conventional Girder 5 plugin is by [Kacper Kowalik](https://github.com/Xarthisius).
+
+Released under the [BSD 3-Clause licence](LICENSE).

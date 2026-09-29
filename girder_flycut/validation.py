@@ -1,33 +1,33 @@
 """Validation shared by API persistence and unit tests."""
+
 import copy
 import json
 import math
 import re
+
+from girder.utility import JsonEncoder
+
 from .schema import unpack
 
 
-def normalize_config(config, user, catalog, submitted=False):
-    if not isinstance(config, dict):
-        raise ValueError("Configuration must be an object.")
-    if len(json.dumps(config, allow_nan=False).encode()) > 256 * 1024:
-        raise ValueError("Configuration exceeds 256 KB.")
-    config = unpack(config)
+def _validate_run_params(config, user, catalog, submitted):
+    """The stack, the catalog references, and whose configuration this is."""
     run = config.get("run_params")
     if not isinstance(run, dict):
         raise ValueError("Missing run parameters.")
     stack = run.get("stackid", "")
-    valid_stack = isinstance(stack, str) and bool(re.fullmatch(r"(?:[0-9A-HJKMNP-TV-Z]{5}|F[0-9]{3,4})", stack))
-    if not valid_stack:
+    if not isinstance(stack, str) or not re.fullmatch(r"(?:[0-9A-HJKMNP-TV-Z]{5}|F[0-9]{3,4})", stack):
         raise ValueError("Stack ID must match F###, F####, or five uppercase Crockford Base32 characters.")
     for field, collection in [("foil_material", "materials"), ("template", "templates")]:
         if run.get(field) not in {entry["id"] for entry in catalog[collection]}:
             raise ValueError(f"Choose a valid {field}.")
+    # A submitted configuration keeps the operator it recorded; anything still
+    # being edited belongs to whoever is editing it.
     run["operator"] = (run.get("operator") or user["login"]) if submitted else user["login"]
-    config["createdBy"] = str(user["_id"])
-    assignment = config.get("laser_assignment")
-    repeat, wraparound = assignment_options(assignment)
-    config["laser_assignment"] = {"repeat": repeat, "wraparound": wraparound}
-    lasers = config.get("laser_params")
+
+
+def _validate_lasers(lasers):
+    """Between one and 28 layers, each a distinct colour with finite settings."""
     if not isinstance(lasers, list) or not 1 <= len(lasers) <= 28:
         raise ValueError("Provide between 1 and 28 laser settings.")
     colors = set()
@@ -50,9 +50,49 @@ def normalize_config(config, user, catalog, submitted=False):
                 raise ValueError(f"Laser {field} must be a finite nonnegative number.")
         if laser.get("passes") is not None and (laser["passes"] < 1 or laser["passes"] != int(laser["passes"])):
             raise ValueError("Passes must be a positive integer.")
-    fields = config.get("custom_fields", {})
-    if not isinstance(fields, dict) or any(not k.strip() or (not (submitted and v is None) and (not isinstance(v, (str, int, float)) or not str(v).strip())) for k, v in fields.items()):
+
+
+def _custom_field_is_valid(name, value, submitted):
+    """Whether one custom field may be stored.
+
+    A name is always required. A null value is allowed only on a submission:
+    submitting renders every field the operator declared, including the ones
+    they left empty, and `None` is what that renders from. A draft has no such
+    rendering, so a blank value there is just blank.
+    """
+    if not name.strip():
+        return False
+    if value is None:
+        return submitted
+    return isinstance(value, (str, int, float)) and bool(str(value).strip())
+
+
+def _validate_custom_fields(fields, submitted):
+    if not isinstance(fields, dict) or not all(
+        _custom_field_is_valid(name, value, submitted) for name, value in fields.items()
+    ):
         raise ValueError("Custom fields require names and values.")
+
+
+def normalize_config(config, user, catalog, submitted=False):
+    """Check a configuration and return it in the section form, ready to store.
+
+    Both at once, deliberately: several of the checks below are what make the
+    normalisation safe to do -- the operator, the assignment options and the
+    per-laser defaults are all written back into the configuration they were
+    validated from.
+    """
+    if not isinstance(config, dict):
+        raise ValueError("Configuration must be an object.")
+    if len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
+        raise ValueError("Configuration exceeds 256 KB.")
+    config = unpack(config)
+    _validate_run_params(config, user, catalog, submitted)
+    config["createdBy"] = str(user["_id"])
+    repeat, wraparound = assignment_options(config.get("laser_assignment"))
+    config["laser_assignment"] = {"repeat": repeat, "wraparound": wraparound}
+    _validate_lasers(config.get("laser_params"))
+    _validate_custom_fields(config.get("custom_fields", {}), submitted)
     return config
 
 
@@ -78,53 +118,61 @@ def assignment_options(assignment):
 
 def normalize_builder_config(config, user, catalog):
     """Persist builder exports after checking blocking requirements."""
-    if not isinstance(config, dict) or len(json.dumps(config, allow_nan=False).encode()) > 256 * 1024:
-        raise ValueError('Configuration must be an object no larger than 256 KB.')
+    if not isinstance(config, dict) or len(json.dumps(config, allow_nan=False, cls=JsonEncoder).encode()) > 256 * 1024:
+        raise ValueError("Configuration must be an object no larger than 256 KB.")
     result = copy.deepcopy(config)
-    run = result.get('run_params')
-    if not isinstance(run, dict) or not isinstance(run.get('stackid'), str) or not run['stackid'].strip():
-        raise ValueError('Stack ID is required.')
-    if not re.fullmatch(r'(?:F[0-9]{3,4}|[0-9A-HJKMNP-TV-Z]{5})', run['stackid'].strip()):
-        raise ValueError('Stack ID must match F###, F####, or five uppercase Crockford Base32 characters.')
-    for field, collection in [('template', 'templates'), ('foil_material', 'materials')]:
-        if not run.get(field) or run[field] not in {entry['id'] for entry in catalog[collection]}:
-            raise ValueError(f'Invalid {field} selection.')
-    lasers = result.get('laser_params', [])
-    if not isinstance(lasers, list) or not any(isinstance(laser, dict) and laser.get('enabled', True) is not False for laser in lasers):
-        raise ValueError('Enable at least one laser parameter entry.')
-    fields = result.get('custom_fields', {})
-    if not isinstance(fields, dict) or any(not name.strip() and value is not None and str(value).strip() for name, value in fields.items()):
-        raise ValueError('Custom fields with values need names.')
+    run = result.get("run_params")
+    if not isinstance(run, dict) or not isinstance(run.get("stackid"), str) or not run["stackid"].strip():
+        raise ValueError("Stack ID is required.")
+    if not re.fullmatch(r"(?:F[0-9]{3,4}|[0-9A-HJKMNP-TV-Z]{5})", run["stackid"].strip()):
+        raise ValueError("Stack ID must match F###, F####, or five uppercase Crockford Base32 characters.")
+    for field, collection in [("template", "templates"), ("foil_material", "materials")]:
+        if not run.get(field) or run[field] not in {entry["id"] for entry in catalog[collection]}:
+            raise ValueError(f"Invalid {field} selection.")
+    lasers = result.get("laser_params", [])
+    if not isinstance(lasers, list) or not any(
+        isinstance(laser, dict) and laser.get("enabled", True) is not False for laser in lasers
+    ):
+        raise ValueError("Enable at least one laser parameter entry.")
+    fields = result.get("custom_fields", {})
+    if not isinstance(fields, dict) or any(
+        not name.strip() and value is not None and str(value).strip() for name, value in fields.items()
+    ):
+        raise ValueError("Custom fields with values need names.")
     # Presets are disabled; retain explicit settings/custom fields from old configs.
-    result['preset'] = None
-    result['custom_fields'] = {name: value if value is not None and str(value).strip() else None for name, value in fields.items() if name.strip()}
-    run['stackid'] = run['stackid'].strip()
-    run['operator'] = str(run.get('operator') or '').strip() or user['login']
-    result['createdBy'] = str(user['_id'])
+    result["preset"] = None
+    result["custom_fields"] = {
+        name: value if value is not None and str(value).strip() else None
+        for name, value in fields.items()
+        if name.strip()
+    }
+    run["stackid"] = run["stackid"].strip()
+    run["operator"] = str(run.get("operator") or "").strip() or user["login"]
+    result["createdBy"] = str(user["_id"])
     return result
 
 
 def builder_warnings(config, catalog):
-    run = config.get('run_params', {})
+    run = config.get("run_params", {})
     warnings = []
-    if not str(run.get('operator') or '').strip():
-        warnings.append('Operator fallback')
-    lasers = config.get('laser_params', [])
-    if any(laser.get('enabled', True) and laser.get('is_default') for laser in lasers):
-        warnings.append('Default laser parameters')
-    repeat, wrap = assignment_options(config.get('laser_assignment', {}))
-    layers = catalog.get('details', {}).get(run.get('template'), {}).get('layers', [])
+    if not str(run.get("operator") or "").strip():
+        warnings.append("Operator fallback")
+    lasers = config.get("laser_params", [])
+    if any(laser.get("enabled", True) and laser.get("is_default") for laser in lasers):
+        warnings.append("Default laser parameters")
+    repeat, wrap = assignment_options(config.get("laser_assignment", {}))
+    layers = catalog.get("details", {}).get(run.get("template"), {}).get("layers", [])
     used = set()
     for position in range(len(layers)):
         index = position // repeat
         if wrap and lasers:
             index %= len(lasers)
-        if index < len(lasers) and lasers[index].get('enabled', True):
+        if index < len(lasers) and lasers[index].get("enabled", True):
             used.add(index)
         else:
-            warnings.append('Unspecified template flyers')
-    if any(not laser.get('enabled', True) or index not in used for index, laser in enumerate(lasers)):
-        warnings.append('Unused laser entries')
-    if any(value is None or not str(value).strip() for value in config.get('custom_fields', {}).values()):
-        warnings.append('Empty custom values')
+            warnings.append("Unspecified template flyers")
+    if any(not laser.get("enabled", True) or index not in used for index, laser in enumerate(lasers)):
+        warnings.append("Unused laser entries")
+    if any(value is None or not str(value).strip() for value in config.get("custom_fields", {}).values()):
+        warnings.append("Empty custom values")
     return warnings

@@ -1,0 +1,21 @@
+//- What the three picker screens have in common: come back, choose one of the
+//- configurations at this stage, continue. Only the labels differ, which is
+//- what makes them mixins rather than three near-identical files.
+
+mixin pickerBack(id)
+  button.button.ghost(type='button', id=id, aria-label='Back to workflow') ←
+
+mixin pickerSelect(label, id, placeholder)
+  label.field.saved-picker
+    | #{label}
+    select(id=id)
+      if placeholder
+        option(value='')= placeholder
+
+mixin pickerContinue(id, label, disabled)
+  button.button.primary.picker-continue(type='button', id=id, disabled=disabled)= label
+
+//- Two of the pickers link out to what they produced -- a Girder folder, or an
+//- IGSN record -- and both start hidden until there is one.
+mixin pickerLink(id, label)
+  a.button.ghost.hidden(id=id, target='_blank', rel='noopener')= label

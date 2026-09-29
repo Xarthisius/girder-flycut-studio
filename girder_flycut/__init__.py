@@ -1,34 +1,78 @@
 """Girder integration for the Flyer configuration builder."""
+
+import logging
 from pathlib import Path
 
+from girder import events
 from girder.plugin import GirderPlugin, getPlugin, registerPluginStaticContent
+from girder.utility.model_importer import ModelImporter
+from girder_dashboards import registerDashboard
+from girder_dashboards.models.dashboard import Dashboard
 
 KEY = "flycut-config"
+
+logger = logging.getLogger(__name__)
 
 
 class FlycutPlugin(GirderPlugin):
     DISPLAY_NAME = "Flyer Studio"
 
     def load(self, info):
-        from girder_dashboards import registerDashboard
+        # Deferred on purpose: settings.py does `from . import KEY`, so importing
+        # either of these at module scope is circular.
+        from . import migrations
+        from .models import FlycutConfig
         from .rest import Flycut
         from .settings import DEFAULTS, validate_dashboard
-        from girder import events
-        events.bind('model.dashboard.save', 'flycut.settings', validate_dashboard)
+
+        ModelImporter.registerModel("flycutConfig", FlycutConfig, plugin="flycut")
+
+        events.bind("model.dashboard.save", "flycut.settings", validate_dashboard)
 
         getPlugin("dashboards").load(info)
         registerDashboard(
-            KEY, name="Flyer Studio",
+            KEY,
+            name="Flyer Studio",
             description="Configure flyer stacks, generate LightBurn files, and register stack IGSNs.",
-            icon="icon-cog", settings=DEFAULTS,
+            icon="icon-cog",
+            settings=DEFAULTS,
         )
-        from girder_dashboards.models.dashboard import Dashboard
-        existing = Dashboard().findOne({'key': KEY, 'name': 'Flyer Config Studio'})
-        if existing:
-            existing['name'] = 'Flyer Studio'
-            Dashboard().save(existing)
+        self._renameLegacyDashboard()
+        # This may not abort the load: a plugin that refuses to import takes the
+        # whole Girder server with it, and a migration is a convenience rather
+        # than a precondition for serving requests.
+        self._guard("could not migrate stored configurations", migrations.run)
         info["apiRoot"].flycut = Flycut()
         registerPluginStaticContent(
-            plugin="flycut", css=[], js=["/main.js"],
-            staticDir=Path(__file__).parent / "web_client", tree=info["serverRoot"],
+            plugin="flycut",
+            css=["/style.css"],
+            js=["/girder-plugin-flycut.umd.cjs"],
+            staticDir=Path(__file__).parent / "web_client" / "dist",
+            tree=info["serverRoot"],
         )
+
+    @staticmethod
+    def _guard(message, action):
+        try:
+            action()
+        except Exception:
+            logger.exception("flycut: %s", message)
+
+    @classmethod
+    def _renameLegacyDashboard(cls):
+        """Carry pre-1.0 documents over to the current dashboard name.
+
+        Saving the document fires `model.dashboard.save`, which runs this
+        plugin's settings validator -- so a deployment whose stored settings
+        have since stopped validating (a deleted creator group is enough) would
+        raise ValidationException here and take the whole server down at
+        startup. A failed rename is cosmetic; refusing to boot is not.
+        """
+
+        def rename():
+            existing = Dashboard().findOne({"key": KEY, "name": "Flyer Config Studio"})
+            if existing:
+                existing["name"] = "Flyer Studio"
+                Dashboard().save(existing)
+
+        cls._guard("could not rename the legacy dashboard document", rename)

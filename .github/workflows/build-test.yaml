@@ -1,0 +1,247 @@
+name: Testing and Linting
+
+on:
+  push:
+    branches:
+      - main
+      - conversion
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Fast lane: everything that needs neither MongoDB nor the patched JSONForms
+  # checkout. This is the gate that should stay green at all times.
+  check:
+    name: Lint, build, and frontend tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+      # Cheap, and first: `vendor/` is gone and stays gone, because both
+      # dependencies are ordinary PyPI releases. It came back once already --
+      # anchoring `build/` to `/build/` un-ignored
+      # vendor/girder-dashboards/build/, and the very commit that deleted the
+      # vendored source swept its build output back in. `.gitignore` stops that
+      # recurring; this is what notices if something else does.
+      - name: Nothing is vendored
+        run: |
+          tracked=$(git ls-files vendor)
+          if [ -n "$tracked" ]; then
+            echo "::error::vendor/ is tracked again; both dependencies come from PyPI"
+            echo "$tracked"
+            exit 1
+          fi
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # Two npm projects: the root lints and tests, the client builds. That
+      # split is what girder's build_plugins.py expects -- it looks for
+      # web_client/package.json and skips a plugin that has none.
+      - name: Install linters
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "ruff==0.16.9"   # keep in sync with requirements-dev.txt
+          npm ci
+          npm --prefix girder_flycut/web_client ci
+
+      # ruff.toml gates E501 and import sorting; `format --check` is what keeps
+      # the rest of Decision 5's formatting from drifting back.
+      - name: Lint Python
+        run: |
+          ruff check .
+          ruff format --check .
+
+      # eslint over every browser source, pug-lint over every template, and
+      # stylelint over every stylesheet.
+      - name: Lint the browser sources
+        run: npm run lint
+
+      # Vite compiles the Pug templates to client-side functions and the
+      # Stylus to one scoped stylesheet. The bundle is not committed, so there
+      # is nothing to check for staleness.
+      - name: Build the browser bundle
+        run: npm run build
+
+      # bundle.cjs loads the built artifact against a stub girder global, which
+      # is what proves every module reached it and that nothing needs a DOM at
+      # evaluation.
+      - name: Frontend tests
+        run: |
+          node tests/core.mjs
+          node tests/status.mjs
+          node tests/workflow.cjs
+          node tests/complete_workflow.cjs
+          node tests/bundle.cjs
+
+  # Slow lane: the Python suite. Mirrors girder-jsonforms' own workflow, which
+  # is the reference for how this dependency has to be set up.
+  pytest:
+    name: Server tests
+    runs-on: ubuntu-24.04
+    services:
+      mongodb:
+        image: mongo:4.4
+        ports:
+          - 27017:27017
+      # Required, not a convenience: the per-stack mutex is a Redis lock and
+      # fails closed, so tests/test_locks.py needs a real one. (girder-jsonforms
+      # also takes a Redis lock at load time, but that one logs and proceeds.)
+      # Note there is deliberately no broker for the pytest job -- see the
+      # eagerWorkerTasks note in tests/test_api.py.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Both dependencies come from PyPI and both ship a prebuilt frontend in
+      # their wheel, which is what the `server` fixture needs: each plugin's
+      # load() registers static content and md5-hashes every file it registers.
+      #
+      # -e: without it the tests import the copy in site-packages while
+      # --cov=girder_flycut measures the working tree, so coverage reports 0%
+      # on a fully passing run. Editable makes them the same files.
+      - name: Install the plugin and its dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install -r requirements-dev.txt
+
+      # Ours is the only bundle not already built: the two dependencies ship
+      # theirs prebuilt, and every registered file is md5-hashed at load.
+      - name: Build the browser bundle
+        run: |
+          npm ci
+          npm --prefix girder_flycut/web_client ci
+          npm run build
+
+      - name: Run tests with coverage
+        env:
+          GIRDER_MAX_CURSOR_TIMEOUT_MS: 60000
+        run: |
+          pytest tests --verbose \
+                 --mongo-uri mongodb://127.0.0.1:27017 \
+                 --cov=girder_flycut \
+                 --cov-report=term \
+                 --cov-report=xml \
+                 --cov-fail-under=80
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  # Third lane: the browser harness. Phase 4 restructures the whole UI and
+  # nothing else renders it, so this is what makes that safe. It walks the
+  # dashboard against a real Girder and fails on any console error, page error
+  # or failed request along the way.
+  browser:
+    name: Browser end-to-end
+    runs-on: ubuntu-24.04
+    services:
+      mongodb:
+        image: mongo:4.4
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    env:
+      GIRDER_URL: http://127.0.0.1:8989
+      GIRDER_ADMIN: admin
+      GIRDER_PASSWORD: adminpassword
+      # Unlike the pytest job, this one needs a real broker. Creating a
+      # deposition fires `deposition.created`, whose JSONForms handler enqueues
+      # an AIMD task with .delay() -- and .delay() needs somewhere to enqueue to
+      # even though the task returns early without a token. pytest sidesteps
+      # that with pytest_girder's eagerWorkerTasks fixture; a running server
+      # cannot.
+      #
+      # Redis, matching the deploy-dev stack, which runs Celery over the same
+      # Redis it uses for notifications rather than a separate broker.
+      GIRDER_WORKER_BROKER: redis://127.0.0.1:6379/
+      GIRDER_WORKER_BACKEND: redis://127.0.0.1:6379/
+      GIRDER_NOTIFICATION_REDIS_URL: redis://127.0.0.1:6379/
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install the plugin and build its bundle
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          npm ci
+          npm --prefix girder_flycut/web_client ci
+          npm run build
+
+      - name: Start Girder
+        run: |
+          GIRDER_MONGO_URI=mongodb://localhost:27017/girder_flycut_e2e \
+            girder serve --host 127.0.0.1 --port 8989 > girder.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf "$GIRDER_URL/api/v1/system/version" > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf "$GIRDER_URL/api/v1/system/version" > /dev/null \
+            || { echo '::error::Girder failed to start'; cat girder.log; exit 1; }
+
+      - name: Create the admin account
+        run: |
+          curl -sf -X POST "$GIRDER_URL/api/v1/user" \
+            -d "login=$GIRDER_ADMIN" -d "password=$GIRDER_PASSWORD" \
+            -d "email=admin@example.org" -d "firstName=Test" -d "lastName=Admin" > /dev/null
+
+      - name: Seed the instance
+        run: python3 test/browser/seed.py
+
+      - name: Install the browser
+        run: |
+          cd test/browser
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Verify in a browser
+        run: node test/browser/verify.cjs
+
+      - name: Upload screenshots and server log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-verification
+          path: |
+            test/browser/screenshots/
+            girder.log
+          if-no-files-found: warn
+          retention-days: 7

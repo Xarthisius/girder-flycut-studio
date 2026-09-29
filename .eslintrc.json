@@ -1,0 +1,78 @@
+{
+  "root": true,
+  "extends": [
+    "@girder"
+  ],
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "script"
+  },
+  "globals": {
+    "girder": "readonly"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    ".venv/",
+    "build/",
+    "dist/",
+    "girder_flycut/web_client/generated/"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "girder_flycut/web_client/**/*.js",
+        "girder_flycut/web_client/**/*.mjs",
+        "*.mjs"
+      ],
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "tests/**/*.cjs"
+      ],
+      "env": {
+        "browser": false,
+        "node": true
+      },
+      "parserOptions": {
+        "sourceType": "script"
+      }
+    },
+    {
+      "files": [
+        "tests/**/*.mjs"
+      ],
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "env": {
+        "browser": false,
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "test/browser/**/*.cjs"
+      ],
+      "env": {
+        "browser": true,
+        "node": true
+      },
+      "parserOptions": {
+        "sourceType": "script"
+      }
+    }
+  ],
+  "rules": {
+    "promise/no-native": "off"
+  }
+}
