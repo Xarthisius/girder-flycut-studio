@@ -9,6 +9,8 @@ from girder.utility.model_importer import ModelImporter
 from girder_dashboards import registerDashboard
 from girder_dashboards.models.dashboard import Dashboard
 
+from .card import cardImage
+
 KEY = "flycut-config"
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,8 @@ class FlycutPlugin(GirderPlugin):
             KEY,
             name="Flyer Studio",
             description="Configure flyer stacks, generate LightBurn files, and register stack IGSNs.",
-            icon="icon-cog",
+            image=cardImage(),
+            icon="icon-target",
             settings=DEFAULTS,
         )
         self._renameLegacyDashboard()
