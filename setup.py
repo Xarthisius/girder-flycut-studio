@@ -16,10 +16,10 @@ setup(
     author_email="bernermaximus@gmail.com",
     maintainer="Kacper Kowalik",
     maintainer_email="xarthisius.kk@gmail.com",
-    url="https://github.com/mxberner/girder-flycut-studio",
+    url="https://github.com/htmdec/girder-flycut-studio",
     project_urls={
-        "Source": "https://github.com/mxberner/girder-flycut-studio",
-        "Issues": "https://github.com/mxberner/girder-flycut-studio/issues",
+        "Source": "https://github.com/htmdec/girder-flycut-studio",
+        "Issues": "https://github.com/htmdec/girder-flycut-studio/issues",
     },
     license="BSD-3-Clause",
     classifiers=[
