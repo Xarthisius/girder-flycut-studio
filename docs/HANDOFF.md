@@ -1,14 +1,14 @@
-# Flyer Studio 1.0.2 handoff
+# Flyer Studio 1.0.3 handoff
 
 The `studio-draft-import-polish` changes are incorporated into `main`.
 
 ## Release and installation
 
-The Python distribution is **girder-flycut**; its Girder plugin entry point is
+The Python distribution is **girder-flycut-studio**; its Girder plugin entry point is
 **flycut**. The repository is named girder-flycut-studio.
 
 ```sh
-python -m pip install 'girder-flycut==1.0.2'
+python -m pip install 'girder-flycut-studio==1.0.3'
 ```
 
 For installation before index publication, install the matching wheel from the
@@ -29,9 +29,9 @@ build from source. See [installation](INSTALLATION.md) for Girder setup.
 
 Versions in setup.py and both package.json files must agree. Build the client
 before `python -m build`; validate with `twine check dist/*` and `check-manifest`.
-The `v1.0.2` tag triggers `.github/workflows/release.yml`: build, PyPI trusted
+The `v1.0.3` tag triggers `.github/workflows/release.yml`: build, PyPI trusted
 publishing, then a signed GitHub release. PyPI must authorize the repository's
-release.yml workflow with the `pypi` environment for project `girder-flycut`.
+release.yml workflow with the `pypi` environment for project `girder-flycut-studio`.
 A successful build alone does not mean publication succeeded; check the publish
 job and the package index.
 
@@ -45,14 +45,8 @@ are not a deployment configuration. See [development](DEVELOPMENT.md),
 
 ## Validation and publication status
 
-The merged changes passed 143 local server tests and two subtests, client tests,
-lint, and package manifest checks. GitHub CI also passed server and browser
-end-to-end checks for the merged implementation.
-
-PyPI rejected the 1.0.1 upload for an unsupported classifier, corrected in 1.0.2.
-The 1.0.2 distribution builds successfully, but PyPI rejects its upload because
-the pending trusted publisher's project name does not match `girder-flycut`.
-The PyPI account owner must configure a pending publisher for exactly
-`girder-flycut`, repository `htmdec/girder-flycut-studio`, workflow `release.yml`,
-environment `pypi`; then rerun failed jobs in release run 38622761092.
-Until publication succeeds, install the wheel from the GitHub release.
+The merged implementation passed 143 local server tests and two subtests,
+client tests, lint, manifest checks, and GitHub server and browser end-to-end CI.
+Releases 1.0.1 and 1.0.2 failed PyPI publication; 1.0.3 changes the distribution
+name to `girder-flycut-studio` at the owner's request. Check the tag's publishing
+job and PyPI before assuming it is available from the index.

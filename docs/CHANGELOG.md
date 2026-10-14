@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+
+- Publish under the requested PyPI distribution name girder-flycut-studio.
+
 ## 1.0.2
 
 - Remove the unsupported Girder classifier rejected by PyPI during the 1.0.1 upload.

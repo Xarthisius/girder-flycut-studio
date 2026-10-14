@@ -32,7 +32,7 @@ The bundled dashboard dependency requires Girder 5.0.13.dev27 or newer. Pip stil
 
 Enable and load the `jsonforms` plugin alongside Flyer Studio.
 
-Start your Girder server with its normal MongoDB and assetstore configuration, then enable **Flyer Studio** in the dashboards administration page and grant the intended users access. The plugin entry point is `flycut`, Python package is `girder_flycut`, and distribution remains `girder-flycut` to replace the current installation cleanly. Do not install the older, separate studio implementation alongside it.
+Start your Girder server with its normal MongoDB and assetstore configuration, then enable **Flyer Studio** in the dashboards administration page and grant the intended users access. The plugin entry point is `flycut`, Python package is `girder_flycut`, and PyPI distribution is `girder-flycut-studio`. If upgrading an editable or wheel installation named `girder-flycut`, uninstall that distribution before installing `girder-flycut-studio`, since both provide `girder_flycut`.
 
 No JSONForms patch is required any more: `create_batch` went upstream as
 [PR #34](https://github.com/Xarthisius/girder-jsonforms/pull/34), and the other two hunks

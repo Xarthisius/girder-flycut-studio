@@ -7,8 +7,8 @@ from setuptools import find_packages, setup
 README = (Path(__file__).parent / "README.md").read_text(encoding="utf-8")
 
 setup(
-    name="girder-flycut",
-    version="1.0.2",
+    name="girder-flycut-studio",
+    version="1.0.3",
     description="Flyer Studio configuration, generation, and IGSN registration for Girder",
     long_description=README,
     long_description_content_type="text/markdown",
