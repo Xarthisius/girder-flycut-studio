@@ -47,6 +47,7 @@ are not a deployment configuration. See [development](DEVELOPMENT.md),
 
 The merged implementation passed 143 local server tests and two subtests,
 client tests, lint, manifest checks, and GitHub server and browser end-to-end CI.
-Releases 1.0.1 and 1.0.2 failed PyPI publication; 1.0.3 changes the distribution
-name to `girder-flycut-studio` at the owner's request. Check the tag's publishing
-job and PyPI before assuming it is available from the index.
+Releases 1.0.1 and 1.0.2 failed PyPI publication. Release 1.0.3 uses the
+distribution name `girder-flycut-studio` and was successfully published to PyPI:
+https://pypi.org/project/girder-flycut-studio/1.0.3/
+Both the wheel and source archive are available.
