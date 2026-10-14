@@ -8,7 +8,7 @@ README = (Path(__file__).parent / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="girder-flycut",
-    version="1.0.0",
+    version="1.0.1",
     description="Flyer Studio configuration, generation, and IGSN registration for Girder",
     long_description=README,
     long_description_content_type="text/markdown",

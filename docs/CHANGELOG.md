@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1
+
+- Import offline JSON configurations from the workspace Drafts folder.
+- Copy and download incomplete configurations without validation.
+- Disable Stack ID autocomplete and fix configuration tooltips.
+- Keep generated metadata fields free of duplicated configuration JSON.
+- Correct the PyPI project link and create the GitHub release during publishing.
+
 ## 1.0.0
 
 Initial standalone source release of Flyer Studio for Girder.

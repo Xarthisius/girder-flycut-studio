@@ -856,48 +856,66 @@ def test_stack_id_format_cannot_be_acknowledged(server, enabled, user):
 def test_uploaded_json_becomes_unvalidated_draft(server, enabled, user, fsAssetstore, section_format):
     from girder_flycut.storage import draft_root
 
-    workspace = Folder().load(enabled['settings']['workspace_folder_id'], force=True)
+    workspace = Folder().load(enabled["settings"]["workspace_folder_id"], force=True)
     root = draft_root(workspace, user)
     config = pack(configuration()) if section_format else configuration()
-    config['run_parameters' if section_format else 'run_params']['stackid'] = ''
+    config["run_parameters" if section_format else "run_params"]["stackid"] = ""
     data = json.dumps(config).encode()
     uploaded = Upload().uploadFromFile(
-        io.BytesIO(data), len(data), 'offline.json', parentType='folder', parent=root,
-        user=user, mimeType='application/json',
+        io.BytesIO(data),
+        len(data),
+        "offline.json",
+        parentType="folder",
+        parent=root,
+        user=user,
+        mimeType="application/json",
     )
-    response = server.request('/flycut/config', user=user)
+    response = server.request("/flycut/config", user=user)
     assertStatusOk(response)
-    draft = next(record for record in response.json if record['_id'] == str(uploaded['itemId']))
-    assert draft['status'] == 'draft'
-    assert draft['config'] == config
-    assert draft['canEdit']
-    assert len(server.request('/flycut/config', user=user).json) == len(response.json)
-    assertStatus(server.request(f"/flycut/config/{draft['_id']}/generate", method='POST', user=user), 400)
-    config['run_parameters' if section_format else 'run_params']['stackid'] = '00005'
-    submitted = server.request('/flycut/config', method='POST', user=user, params={
-        'id': draft['_id'], 'config': json.dumps(config), 'submit': True, 'validated': True,
-    })
+    draft = next(record for record in response.json if record["_id"] == str(uploaded["itemId"]))
+    assert draft["status"] == "draft"
+    assert draft["config"] == config
+    assert draft["canEdit"]
+    assert len(server.request("/flycut/config", user=user).json) == len(response.json)
+    assertStatus(server.request(f"/flycut/config/{draft['_id']}/generate", method="POST", user=user), 400)
+    config["run_parameters" if section_format else "run_params"]["stackid"] = "00005"
+    submitted = server.request(
+        "/flycut/config",
+        method="POST",
+        user=user,
+        params={
+            "id": draft["_id"],
+            "config": json.dumps(config),
+            "submit": True,
+            "validated": True,
+        },
+    )
     assertStatusOk(submitted)
-    assert submitted.json['status'] == 'submitted'
-    folder = Folder().load(Item().load(draft['_id'], force=True)['folderId'], force=True)
-    assert folder['name'] == 'stack00005'
-    assert folder['parentId'] == workspace['_id']
+    assert submitted.json["status"] == "submitted"
+    folder = Folder().load(Item().load(draft["_id"], force=True)["folderId"], force=True)
+    assert folder["name"] == "stack00005"
+    assert folder["parentId"] == workspace["_id"]
 
 
-@pytest.mark.parametrize('payload', ['{', '{"unrelated": true}', '{"run_params": {}, "laser_params": [null]}'])
+@pytest.mark.parametrize("payload", ["{", '{"unrelated": true}', '{"run_params": {}, "laser_params": [null]}'])
 def test_unrelated_upload_remains_in_drafts(server, enabled, user, fsAssetstore, payload):
     from girder_flycut.storage import draft_root
 
-    workspace = Folder().load(enabled['settings']['workspace_folder_id'], force=True)
+    workspace = Folder().load(enabled["settings"]["workspace_folder_id"], force=True)
     root = draft_root(workspace, user)
     data = payload.encode()
     file = Upload().uploadFromFile(
-        io.BytesIO(data), len(data), 'invalid.json', parentType='folder', parent=root,
-        user=user, mimeType='application/json',
+        io.BytesIO(data),
+        len(data),
+        "invalid.json",
+        parentType="folder",
+        parent=root,
+        user=user,
+        mimeType="application/json",
     )
-    response = server.request('/flycut/config', user=user)
+    response = server.request("/flycut/config", user=user)
     assertStatusOk(response)
     assert response.json == []
-    item = Item().load(file['itemId'], force=True)
-    assert item['folderId'] == root['_id']
+    item = Item().load(file["itemId"], force=True)
+    assert item["folderId"] == root["_id"]
     assert CONFIG_FIELD not in item
