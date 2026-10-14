@@ -1,6 +1,6 @@
 {
   "name": "girder-flycut-studio",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Repository-wide linting and tests for Flyer Studio",
   "author": "Max Berner <bernermaximus@gmail.com> (https://github.com/mxberner)",
   "contributors": [

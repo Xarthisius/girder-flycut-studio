@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Remove the unsupported Girder classifier rejected by PyPI during the 1.0.1 upload.
+
 ## 1.0.1
 
 - Import offline JSON configurations from the workspace Drafts folder.

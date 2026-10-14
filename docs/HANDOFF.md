@@ -1,4 +1,4 @@
-# Flyer Studio 1.0.1 handoff
+# Flyer Studio 1.0.2 handoff
 
 The `studio-draft-import-polish` changes are incorporated into `main`.
 
@@ -8,7 +8,7 @@ The Python distribution is **girder-flycut**; its Girder plugin entry point is
 **flycut**. The repository is named girder-flycut-studio.
 
 ```sh
-python -m pip install 'girder-flycut==1.0.1'
+python -m pip install 'girder-flycut==1.0.2'
 ```
 
 For installation before index publication, install the matching wheel from the
@@ -29,7 +29,7 @@ build from source. See [installation](INSTALLATION.md) for Girder setup.
 
 Versions in setup.py and both package.json files must agree. Build the client
 before `python -m build`; validate with `twine check dist/*` and `check-manifest`.
-The `v1.0.1` tag triggers `.github/workflows/release.yml`: build, PyPI trusted
+The `v1.0.2` tag triggers `.github/workflows/release.yml`: build, PyPI trusted
 publishing, then a signed GitHub release. PyPI must authorize the repository's
 release.yml workflow with the `pypi` environment for project `girder-flycut`.
 A successful build alone does not mean publication succeeded; check the publish
