@@ -105,8 +105,7 @@ class LifecycleRoutes:
                     io.BytesIO(data), len(data), name, parentType="folder", parent=folder, user=user, mimeType=mime
                 )
                 output_item = Item().load(file["itemId"], force=True)
-                extra = {"metadata": json.loads(data)} if name.endswith("-metadata.json") else {}
-                annotate(output_item, association(configuration(item)), extra)
+                annotate(output_item, association(configuration(item)))
                 files.append({"_id": str(file["_id"]), "itemId": str(file["itemId"]), "name": name})
             FlycutConfig().setState(
                 item,
@@ -262,14 +261,13 @@ class LifecycleRoutes:
             Folder().setMetadata(folder, metadata)
             registered_at = datetime.now(timezone.utc)
             for artifact in artifact_items:
-                extra = {}
                 if state.get("outputSchemaVersion", 0) >= 2 and artifact["name"].endswith("-inventory.csv"):
                     # The one place that still needs the string: csv.DictWriter
                     # would render a datetime with a space separator, not ISO.
                     register_inventory(artifact, user, registered_at.isoformat())
                 if state.get("outputSchemaVersion", 0) >= 3 and artifact["name"].endswith("-metadata.json"):
-                    extra["metadata"] = register_metadata(artifact, registered_at, user)
-                annotate(artifact, metadata, extra)
+                    register_metadata(artifact, registered_at, user)
+                annotate(artifact, metadata)
             receipt = {
                 **metadata,
                 "testRun": test_run,

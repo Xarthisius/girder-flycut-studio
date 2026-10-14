@@ -19,6 +19,7 @@ import { exportDecision } from '../core/validate.js';
 import { request } from '../util.js';
 import builderScreenTemplate from '../templates/builderScreen.pug';
 import CustomFieldsView from './CustomFieldsView.js';
+import HelpTooltipView from './HelpTooltipView.js';
 import JsonPanelView from './JsonPanelView.js';
 import LaserListView from './LaserListView.js';
 import PreviewView from './PreviewView.js';
@@ -437,9 +438,6 @@ const ConfigBuilderView = View.extend({
     },
 
     copyJson: async function () {
-        if (!this.confirmExport()) {
-            return;
-        }
         await navigator.clipboard.writeText(JSON.stringify(this.finalConfigObject(), null, 2));
         this.toast('JSON copied to clipboard');
     },
@@ -519,52 +517,13 @@ const ConfigBuilderView = View.extend({
      * are the densest thing on the page.
      */
     mountTooltip: function () {
-        const tooltip = document.createElement('div');
-        tooltip.className = 'floating-help hidden';
-        tooltip.setAttribute('role', 'tooltip');
-        tooltip.id = 'flycut-help-tooltip';
-        document.body.append(tooltip);
-        let active = null;
-        const hide = () => {
-            tooltip.classList.add('hidden');
-            active?.removeAttribute('aria-describedby');
-            active = null;
-        };
-        const show = (event) => {
-            const button = event.target.closest?.('.help[data-tip]');
-            if (!button) {
-                return;
-            }
-            active = button;
-            tooltip.textContent = button.dataset.tip;
-            button.setAttribute('aria-describedby', tooltip.id);
-            tooltip.classList.remove('hidden');
-            // Above the button when there is room, below when there is not,
-            // and never past either edge of the window.
-            const rect = button.getBoundingClientRect();
-            const box = tooltip.getBoundingClientRect();
-            tooltip.style.left =
-                Math.max(10, Math.min(rect.left, window.innerWidth - box.width - 10)) + 'px';
-            tooltip.style.top =
-                (rect.top >= box.height + 14 ? rect.top - box.height - 8 : rect.bottom + 8) + 'px';
-        };
-        const dismiss = (event) => { if (event.target.closest?.('.help')) { hide(); } };
-        this.el.addEventListener('pointerover', show);
-        this.el.addEventListener('focusin', show);
-        this.el.addEventListener('pointerout', dismiss);
-        this.el.addEventListener('focusout', dismiss);
-        window.addEventListener('scroll', hide, true);
-        window.addEventListener('resize', hide);
-        this.cleanupTooltip = () => {
-            window.removeEventListener('scroll', hide, true);
-            window.removeEventListener('resize', hide);
-            tooltip.remove();
-        };
+        this.tooltip?.destroy();
+        this.tooltip = new HelpTooltipView({ parentView: this, target: this.el }).render();
     },
 
     destroy: function () {
         clearTimeout(this.toastTimer);
-        this.cleanupTooltip?.();
+        this.tooltip?.destroy();
         return View.prototype.destroy.call(this);
     }
 });

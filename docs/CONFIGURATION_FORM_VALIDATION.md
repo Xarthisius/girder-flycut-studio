@@ -8,6 +8,10 @@ server checks. It documents implemented behavior, not additional desired rules.
 
 - **Save** stores a draft; it does not require a complete form or acknowledgement
   of warnings. A draft may have an empty Stack ID and no material/template.
+- **Copy** and **Download** in the JSON tab export the current form without
+  requiring completion or warning acknowledgement. Uploads into the workspace
+  **Drafts** folder are discovered when the configuration list refreshes and
+  remain unvalidated until submitted. See [offline drafts](../README.md#offline-drafts).
 - Saved JSON must be an object no larger than 256 KiB and contain no non-finite
   JSON numbers. The optional “Save as” name is limited to 160 characters.
 - A blank draft name becomes `stack<ID>-config` when an ID is present, otherwise

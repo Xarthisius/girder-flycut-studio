@@ -8,13 +8,14 @@ from bson import ObjectId
 from girder.api import access
 from girder.api.describe import Description, autoDescribeRoute
 from girder.constants import AccessType
-from girder.exceptions import RestException
+from girder.exceptions import AccessException, RestException
 from girder.models.folder import Folder
 from girder.models.item import Item
 from girder.utility import JsonEncoder
 
 from .. import settings as studio_settings
 from ..artifacts import CONFIG_QUERY, save_config_file
+from ..drafts import import_uploads
 from ..import_storage import load_input
 from ..materials import foil_materials, resolve_material
 from ..models import FlycutConfig
@@ -107,6 +108,14 @@ class ConfigRoutes:
     @autoDescribeRoute(Description("List your latest 100 configurations."))
     @gated
     def configs(self, user):
+        workspace_id = studio_settings.policy()["workspace_folder_id"]
+        if workspace_id:
+            try:
+                workspace = Folder().load(workspace_id, user=user, level=AccessType.READ)
+            except AccessException:
+                workspace = None
+            if workspace:
+                import_uploads(workspace, user)
         scope = FlycutConfig().workspaceScope()
         if not scope:
             return []

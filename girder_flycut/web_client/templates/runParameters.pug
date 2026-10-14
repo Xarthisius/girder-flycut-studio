@@ -6,7 +6,7 @@ include formSection
     span.field-label
       | Stack ID #[span.required *] #[+help('Stack ID help', 'A unique stack identifier: a 5-character Crockford ID or legacy F### / F#### ID. Other values require confirmation.')]
     .template-picker-row
-      input#stackid(name='stackid', placeholder='e.g. 00005', required)
+      input#stackid(autocomplete='off', name='stackid', placeholder='e.g. 00005', required)
       button#autoStackIdBtn.button.ghost(type='button', aria-label='Assign lowest available Stack ID', aria-pressed='false', title='Assign lowest available Stack ID') AUTO
     small#stackidError.error
   label.field(for='operator')

@@ -563,7 +563,7 @@ def test_live_foil_catalog_and_dynamic_registration(server, enabled, user, admin
                 assert_iso(row["time_registered"], "inventory time_registered")
         elif file["name"].endswith("-metadata.json"):
             assert meta["igsn"] == child["igsn"]
-            assert_iso(meta["metadata"]["time_registered"], "time_registered")
+            assert "metadata" not in meta
             assert "config" not in meta
         else:
             assert "config" not in meta
@@ -757,7 +757,7 @@ def test_canonical_config_and_history(server, enabled, user):
         metadata_file = next(f for f in response.json["files"] if f["name"].endswith("-metadata.json"))
         with File().open(File().load(metadata_file["_id"], force=True)) as stream:
             payload = json.load(stream)
-        assert Item().load(metadata_file["itemId"], force=True)["meta"]["metadata"] == payload
+        assert "metadata" not in Item().load(metadata_file["itemId"], force=True)["meta"]
         assert_iso(payload["time_submitted"], "time_submitted")
         assert_iso(payload["time_generated"], "time_generated")
         assert payload["time_registered"] is None and payload["time_machined"] is None
@@ -850,3 +850,54 @@ def test_stack_id_format_cannot_be_acknowledged(server, enabled, user):
         )
         assertStatus(response, 400)
         assert "Stack ID must match" in response.json["message"]
+
+
+@pytest.mark.parametrize("section_format", [True, False])
+def test_uploaded_json_becomes_unvalidated_draft(server, enabled, user, fsAssetstore, section_format):
+    from girder_flycut.storage import draft_root
+
+    workspace = Folder().load(enabled['settings']['workspace_folder_id'], force=True)
+    root = draft_root(workspace, user)
+    config = pack(configuration()) if section_format else configuration()
+    config['run_parameters' if section_format else 'run_params']['stackid'] = ''
+    data = json.dumps(config).encode()
+    uploaded = Upload().uploadFromFile(
+        io.BytesIO(data), len(data), 'offline.json', parentType='folder', parent=root,
+        user=user, mimeType='application/json',
+    )
+    response = server.request('/flycut/config', user=user)
+    assertStatusOk(response)
+    draft = next(record for record in response.json if record['_id'] == str(uploaded['itemId']))
+    assert draft['status'] == 'draft'
+    assert draft['config'] == config
+    assert draft['canEdit']
+    assert len(server.request('/flycut/config', user=user).json) == len(response.json)
+    assertStatus(server.request(f"/flycut/config/{draft['_id']}/generate", method='POST', user=user), 400)
+    config['run_parameters' if section_format else 'run_params']['stackid'] = '00005'
+    submitted = server.request('/flycut/config', method='POST', user=user, params={
+        'id': draft['_id'], 'config': json.dumps(config), 'submit': True, 'validated': True,
+    })
+    assertStatusOk(submitted)
+    assert submitted.json['status'] == 'submitted'
+    folder = Folder().load(Item().load(draft['_id'], force=True)['folderId'], force=True)
+    assert folder['name'] == 'stack00005'
+    assert folder['parentId'] == workspace['_id']
+
+
+@pytest.mark.parametrize('payload', ['{', '{"unrelated": true}', '{"run_params": {}, "laser_params": [null]}'])
+def test_unrelated_upload_remains_in_drafts(server, enabled, user, fsAssetstore, payload):
+    from girder_flycut.storage import draft_root
+
+    workspace = Folder().load(enabled['settings']['workspace_folder_id'], force=True)
+    root = draft_root(workspace, user)
+    data = payload.encode()
+    file = Upload().uploadFromFile(
+        io.BytesIO(data), len(data), 'invalid.json', parentType='folder', parent=root,
+        user=user, mimeType='application/json',
+    )
+    response = server.request('/flycut/config', user=user)
+    assertStatusOk(response)
+    assert response.json == []
+    item = Item().load(file['itemId'], force=True)
+    assert item['folderId'] == root['_id']
+    assert CONFIG_FIELD not in item

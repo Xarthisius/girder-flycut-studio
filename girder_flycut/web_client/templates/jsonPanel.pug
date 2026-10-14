@@ -1,4 +1,6 @@
 .viewer-toolbar
   span config.json
-  button#copyBtn(type='button') Copy
+  .json-actions
+    button#copyBtn(type='button') Copy
+    button#downloadBtn(type='button') Download
 pre#jsonOutput(tabindex='0', aria-label='Configuration JSON', aria-live='polite')

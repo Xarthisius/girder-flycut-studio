@@ -51,21 +51,12 @@ def association(config):
     return {"foilIgsn": foil or None, "igsn": f"{foil}-{stack}" if foil and stack else None, "stackid": stack or None}
 
 
-def annotate(item, identifiers, extra=None):
+def annotate(item, identifiers):
     meta = item.setdefault("meta", {})
-    for key in ("stackIgsn", "stackigsn", "stackId", "stackDepositionId", "config"):
+    for key in ("stackIgsn", "stackigsn", "stackId", "stackDepositionId", "config", "metadata"):
         meta.pop(key, None)
     meta.update(identifiers)
-    meta.update(extra or {})
-    snapshots = copy.deepcopy(extra or {})
-    item = Item().save(item)
-    if snapshots:
-        # Restored after the save, not through it: girder-jsonforms rewrites
-        # ISO-8601 strings under `meta` into dates, and this payload mirrors an
-        # artifact file that has to match it byte for byte. Same invariant as
-        # `register_metadata`.
-        Item().collection.update_one({"_id": item["_id"]}, {"$set": {"meta." + k: v for k, v in snapshots.items()}})
-    return Item().load(item["_id"], force=True)
+    return Item().save(item)
 
 
 def save_config_file(item, user, rendered=None):
@@ -99,13 +90,7 @@ def save_config_file(item, user, rendered=None):
 
 
 def register_metadata(item, registered_at, user):
-    """Stamp the generated metadata artifact, and return what the file holds.
-
-    The caller stores the return value as the artifact item's metadata, and a
-    test pins the two to be equal -- so the timestamp is normalised to its ISO
-    string here rather than left as a datetime that `JsonEncoder` would render
-    one way into the file and Mongo would store another way beside it.
-    """
+    """Stamp registration in the JSON file without duplicating it in item metadata."""
     file = File().findOne({"itemId": item["_id"], "name": item["name"]})
     with File().open(file) as stream:
         payload = json.load(stream)
