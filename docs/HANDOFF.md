@@ -42,3 +42,17 @@ services for the destination environment. Local preview services and credentials
 are not a deployment configuration. See [development](DEVELOPMENT.md),
 [JSONForms compatibility](JSONFORMS_COMPATIBILITY.md), and
 [form validation](CONFIGURATION_FORM_VALIDATION.md).
+
+## Validation and publication status
+
+The merged changes passed 143 local server tests and two subtests, client tests,
+lint, and package manifest checks. GitHub CI also passed server and browser
+end-to-end checks for the merged implementation.
+
+PyPI rejected the 1.0.1 upload for an unsupported classifier, corrected in 1.0.2.
+The 1.0.2 distribution builds successfully, but PyPI rejects its upload because
+the pending trusted publisher's project name does not match `girder-flycut`.
+The PyPI account owner must configure a pending publisher for exactly
+`girder-flycut`, repository `htmdec/girder-flycut-studio`, workflow `release.yml`,
+environment `pypi`; then rerun failed jobs in release run 38622761092.
+Until publication succeeds, install the wheel from the GitHub release.
