@@ -6,8 +6,28 @@ from girder.models.folder import Folder
 from girder.models.item import Item
 
 
+def _drafts_query(workspace):
+    return {"parentId": workspace["_id"], "parentCollection": "folder", "name": "Drafts"}
+
+
+def existing_draft_root(workspace):
+    """The workspace's own Drafts folder, or None -- without creating or refusing anything.
+
+    `draft_root` is the save path's answer: it creates the folder, and it
+    raises a 409 for a workspace whose `Drafts` folder it does not own. The
+    import path cannot use it. That path runs on every listing request, where
+    a write is a side effect nobody asked for and the 409 escapes
+    `GET /flycut/config` and takes the whole dashboard with it. Here an
+    unrelated folder simply means there is nothing to import.
+    """
+    folder = Folder().findOne(_drafts_query(workspace))
+    if folder and folder.get("meta", {}).get("flycutDraftsWorkspace") == str(workspace["_id"]):
+        return folder
+    return None
+
+
 def draft_root(workspace, user):
-    folder = Folder().findOne({"parentId": workspace["_id"], "parentCollection": "folder", "name": "Drafts"})
+    folder = Folder().findOne(_drafts_query(workspace))
     if folder:
         if folder.get("meta", {}).get("flycutDraftsWorkspace") != str(workspace["_id"]):
             raise RestException(

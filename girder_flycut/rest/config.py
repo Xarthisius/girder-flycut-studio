@@ -2,6 +2,7 @@
 
 import copy
 import json
+import logging
 from datetime import datetime, timezone
 
 from bson import ObjectId
@@ -26,6 +27,8 @@ from ..validation import builder_warnings, normalize_builder_config
 from .catalog import CATALOG
 from .gate import gated
 from .locking import stack_locked
+
+logger = logging.getLogger(__name__)
 
 # Sorting has to survive a deployment mid-migration, where some records still
 # carry the pre-migration ISO string. Both forms compare correctly against
@@ -115,7 +118,13 @@ class ConfigRoutes:
             except AccessException:
                 workspace = None
             if workspace:
-                import_uploads(workspace, user)
+                # Importing drafts is a convenience bolted onto the listing.
+                # Listing the configurations is what the dashboard cannot open
+                # without, so the convenience never gets to fail the request.
+                try:
+                    import_uploads(workspace, user)
+                except Exception:
+                    logger.exception("flycut: draft import failed; listing the workspace without it")
         scope = FlycutConfig().workspaceScope()
         if not scope:
             return []

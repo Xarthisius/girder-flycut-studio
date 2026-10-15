@@ -48,6 +48,10 @@ export default View.extend({
         window.addEventListener('resize', hide);
         this.cleanupTooltip = () => {
             hide();
+            // `el` lives on document.body, and Girder's View.destroy only
+            // empties it -- so without this the page keeps one stale tooltip
+            // per builder it has ever mounted.
+            tooltip.remove();
             window.removeEventListener('scroll', hide, true);
             window.removeEventListener('resize', hide);
             this.target.removeEventListener('pointerover', show);
